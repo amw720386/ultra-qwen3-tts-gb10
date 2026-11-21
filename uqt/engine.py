@@ -181,6 +181,7 @@ class Engine:
         self.codes = torch.zeros(max_len, self.n_groups, dtype=torch.long, device=dev)
         self.graphs: dict = {}
         self.triton_sampler = triton_sampler
+        self._fast = None
         self.pos_host = 0
         self.frames_host = 0
         self._pool = None
@@ -215,7 +216,25 @@ class Engine:
     # ------------------------------------------------------------------ prompt
 
     @torch.inference_mode()
-    def build_prompt(self, kind: str, **kw) -> Prompt:
+    def build_prompt(self, kind: str, fast: bool = True, **kw) -> Prompt:
+        """Fast cached builder when the request is a supported case, else the official builder."""
+        if fast:
+            if self._fast is None:
+                from uqt.prompt import FastPromptBuilder
+                self._fast = FastPromptBuilder(self)
+            extra = set(kw) - {"text", "language", "speaker", "instruct", "voice_clone_prompt"}
+            p = None
+            if not extra and isinstance(kw.get("text"), str) and isinstance(kw.get("language"), str):
+                if kind == "custom":
+                    p = self._fast.custom(kw["text"], kw["language"], kw.get("speaker"), kw.get("instruct"))
+                elif kind == "clone" and kw.get("voice_clone_prompt") is not None:
+                    p = self._fast.clone(kw["text"], kw["language"], kw["voice_clone_prompt"])
+            if p is not None:
+                return p
+        return self.build_prompt_official(kind, **kw)
+
+    @torch.inference_mode()
+    def build_prompt_official(self, kind: str, **kw) -> Prompt:
         """Run the official prompt builder and capture what it would pass to talker.generate."""
         talker = self.m.talker
         captured = {}

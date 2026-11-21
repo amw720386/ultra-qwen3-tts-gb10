@@ -407,3 +407,52 @@ def fcp_test(variant: str = "CustomVoice", frames: int = 120):
         out["pdl"] = bool(eng.fcp._pdl_configs)
         print(json.dumps(out, indent=1))
         return out
+
+
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=1800)
+def prompt_test():
+    """Fast prompt builder vs the official builder: identical embeddings, and timing."""
+    import torch
+    from uqt.common import TIMING_TEXTS
+    from uqt.engine import Engine
+
+    man = json.load(open("/data/manifest.json"))
+    out = {}
+    with torch.inference_mode():
+        for variant in ("Base", "CustomVoice"):
+            for dname in ("fp32", "bf16"):
+                tts = _load(variant, dname)
+                eng = Engine(tts, max_len=2048, compile=False, fused_cp=False, graph_decoder=False)
+                kind = "clone" if variant == "Base" else "custom"
+                diffs = []
+                calls = []
+                for i, text in enumerate(TIMING_TEXTS + [man[1]["target_text"]]):
+                    if kind == "clone":
+                        it = man[i % 3]
+                        vcp = tts.create_voice_clone_prompt(ref_audio=it["prompt_wav"], ref_text=it["prompt_text"])
+                        calls.append(dict(text=text, language="English", voice_clone_prompt=vcp))
+                    else:
+                        calls.append(dict(text=text, language="English", speaker=["Ryan", "Vivian", "Aiden"][i % 3]))
+                for c in calls:
+                    a = eng.build_prompt_official(kind, **c)
+                    b = eng.build_prompt(kind, **c)
+                    same_shape = a.embeds.shape == b.embeds.shape and a.trailing.shape == b.trailing.shape
+                    d = {"shape_ok": same_shape, "T": int(a.embeds.shape[0]), "Tt": int(a.trailing.shape[0])}
+                    if same_shape:
+                        d["max_diff_embeds"] = float((a.embeds.float() - b.embeds.float()).abs().max())
+                        d["max_diff_trailing"] = float((a.trailing.float() - b.trailing.float()).abs().max())
+                        d["max_diff_pad"] = float((a.pad.float() - b.pad.float()).abs().max())
+                    diffs.append(d)
+                tim = {}
+                for name, fn in (("official", eng.build_prompt_official), ("fast", eng.build_prompt)):
+                    fn(kind, **calls[2]); torch.cuda.synchronize()
+                    t = time.perf_counter()
+                    for _ in range(20):
+                        fn(kind, **calls[2])
+                    torch.cuda.synchronize()
+                    tim[f"{name}_ms"] = (time.perf_counter() - t) * 1000 / 20
+                out[f"{variant}-{dname}"] = {"cases": diffs, **tim}
+                del eng, tts
+                torch.cuda.empty_cache()
+    print(json.dumps(out, indent=1))
+    return out

@@ -1,0 +1,218 @@
+{
+ "Base-fp32": {
+  "cases": [
+   {
+    "shape_ok": true,
+    "T": 49,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 54,
+    "Tt": 1,
+    "max_diff_embeds": 1.1920928955078125e-07,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 53,
+    "Tt": 1,
+    "max_diff_embeds": 1.1920928955078125e-07,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 49,
+    "Tt": 1,
+    "max_diff_embeds": 1.1920928955078125e-07,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 54,
+    "Tt": 1,
+    "max_diff_embeds": 1.1920928955078125e-07,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 53,
+    "Tt": 1,
+    "max_diff_embeds": 1.1920928955078125e-07,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   }
+  ],
+  "official_ms": 2.3901392500000007,
+  "fast_ms": 0.24325024999996003
+ },
+ "Base-bf16": {
+  "cases": [
+   {
+    "shape_ok": true,
+    "T": 49,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 54,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 53,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 49,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 54,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 53,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   }
+  ],
+  "official_ms": 2.4426768999999737,
+  "fast_ms": 0.24521855000010362
+ },
+ "CustomVoice-fp32": {
+  "cases": [
+   {
+    "shape_ok": true,
+    "T": 20,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 25,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 31,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 35,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 43,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 22,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   }
+  ],
+  "official_ms": 2.0239396999999215,
+  "fast_ms": 0.24312235000003568
+ },
+ "CustomVoice-bf16": {
+  "cases": [
+   {
+    "shape_ok": true,
+    "T": 20,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 25,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 31,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 35,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 43,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   },
+   {
+    "shape_ok": true,
+    "T": 22,
+    "Tt": 1,
+    "max_diff_embeds": 0.0,
+    "max_diff_trailing": 0.0,
+    "max_diff_pad": 0.0
+   }
+  ],
+  "official_ms": 1.9811798999999297,
+  "fast_ms": 0.22390845000010984
+ }
+}
