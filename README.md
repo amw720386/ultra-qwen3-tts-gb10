@@ -79,3 +79,41 @@ single-stream engine scores 1.80-2.53% and the official implementation 1.86-5.85
 - Every packed-prefill bucket must be captured at startup (`BatchEngine.warm_pack`): a bucket
   first reached under load compiled lazily and stalled admission for ~34 s.
 - Startup (compile and graph capture for every batch / length bucket) takes several minutes.
+
+## Head-to-head on one H100 (same client, same texts)
+
+All systems run as HTTP servers in their own process on the same Modal H100 80GB HBM3, streaming raw
+16-bit 24 kHz PCM, measured with `bench/h2h/client.py` (time from request send; 60 LibriSpeech
+texts for latency, 300 for load; CustomVoice, speaker Ryan). Competitors use their fastest documented
+configuration: vLLM-Omni 0.32.0 `qwen3_tts_fused_single_gpu.yaml` + `talker_stream_first_audio`
+(best of 4 documented profiles), sglang-omni @777c17f with the CuTeDSL sm90 backend and stateful
+codec (CI CustomVoice preset). Scripts: `bench/h2h/{vllm_omni,sglang_omni,uqt_h2h}.py`.
+
+Single stream:
+
+| System | TTFA p50 / p90 | TTFA voiced p50 | RTF p50 | Playback gap after first chunk | WER (60 utts) |
+|---|---|---|---|---|---|
+| uqt single-stream engine | **9.0 / 10.2 ms** | **16.2 ms** | **0.046** | none | 2.80% |
+| vLLM-Omni 0.32 (fused) | 13.9 / 14.4 ms | 118.5 ms | 0.053 | ~25 ms on every stream | 1.89% |
+| sglang-omni (CuTeDSL) | 22.2 / 23.3 ms | 22.2 ms | 0.048 | none | 1.62% |
+| uqt batched server, lone request | 21.0 / 22.3 ms | 21.1 ms | 0.053 | none | 2.07% |
+
+WER differences on 60 utterances are within sampling noise (the 300 x 2-seed comparison against the
+official implementation in `ultra-qwen3-tts` shows parity).
+
+Back-to-back clients (throughput in audio seconds per second / TTFA p50):
+
+| Clients | uqt batched server | vLLM-Omni 0.32 (fused) | sglang-omni (CuTeDSL) |
+|---|---|---|---|
+| 1 | 18 / 21 ms | 18 / 14 ms | 19 / 22 ms |
+| 8 | 84 / 33 ms | 103 / 17 ms | 90 / 30 ms |
+| 32 | 208 / 49 ms | 316 / 21 ms | 193 / 32 ms |
+| 64 | 281 / 64 ms | 542 / 24 ms | 238 / 35 ms (18% underruns) |
+| 128 | 477 / 87 ms | **815 / 33 ms** | 255 / 1.7 s (queueing) |
+| 256 | 600 / **150 ms** | 923 / 878 ms (queueing) | 257 / 5.2 s (queueing) |
+
+uqt has no underruns at any level; vLLM-Omni's streams all have a ~25 ms playback gap after the first
+chunk. Behind HTTP, vLLM-Omni currently delivers more throughput than the uqt batched server between
+8 and 256 clients; the uqt server loses throughput relative to the same engine measured in-process
+(892 audio-s/s at 256 back-to-back clients) and decodes every 2-frame chunk, where vLLM-Omni decodes
+25-frame chunks.
