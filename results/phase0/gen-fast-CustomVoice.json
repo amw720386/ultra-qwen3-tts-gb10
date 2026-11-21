@@ -1,0 +1,704 @@
+{
+ "system": "faster-qwen3-tts 0.5.4",
+ "variant": "CustomVoice",
+ "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+ "speaker": "Ryan",
+ "load_s": 16.781994609,
+ "sigs": {
+  "generate_custom_voice": "(text: str, speaker: str, language: str, instruct: Optional[str] = None, non_streaming_mode: Optional[bool] = None, max_new_tokens: int = 2048, min_new_tokens: int = 2, temperature: float = 0.9, top_k: int = 50, top_p: float = 1.0, do_sample: bool = True, repetition_penalty: float = 1.05) -> Tuple[list, int]",
+  "generate_custom_voice_streaming": "(text: str, speaker: str, language: str, instruct: Optional[str] = None, non_streaming_mode: Optional[bool] = None, max_new_tokens: int = 2048, min_new_tokens: int = 2, temperature: float = 0.9, top_k: int = 50, top_p: float = 1.0, do_sample: bool = True, repetition_penalty: float = 1.05, chunk_size: int = 12) -> Generator[Tuple[numpy.ndarray, int, dict], NoneType, NoneType]",
+  "generate_voice_clone": "(text: str, language: str, ref_audio: Union[str, pathlib.Path, NoneType] = None, ref_text: str = '', max_new_tokens: int = 2048, min_new_tokens: int = 2, temperature: float = 0.9, top_k: int = 50, top_p: float = 1.0, do_sample: bool = True, repetition_penalty: float = 1.05, xvec_only: bool = False, non_streaming_mode: Optional[bool] = None, append_silence: bool = True, instruct: Optional[str] = None, ref_spk: Union[str, pathlib.Path, NoneType] = None, ref_rvq: Union[str, pathlib.Path, NoneType] = None, ref_spk_emb: Optional[numpy.ndarray] = None, ref_codes: Optional[numpy.ndarray] = None, voice_clone_prompt: Union[Dict[str, Any], List[Any], NoneType] = None) -> Tuple[list, int]",
+  "generate_voice_clone_streaming": "(text: str, language: str, ref_audio: Union[str, pathlib.Path, NoneType] = None, ref_text: str = '', max_new_tokens: int = 2048, min_new_tokens: int = 2, temperature: float = 0.9, top_k: int = 50, top_p: float = 1.0, do_sample: bool = True, repetition_penalty: float = 1.05, chunk_size: int = 12, xvec_only: bool = False, non_streaming_mode: Optional[bool] = None, append_silence: bool = True, parity_mode: bool = False, instruct: Optional[str] = None, ref_spk: Union[str, pathlib.Path, NoneType] = None, ref_rvq: Union[str, pathlib.Path, NoneType] = None, ref_spk_emb: Optional[numpy.ndarray] = None, ref_codes: Optional[numpy.ndarray] = None, voice_clone_prompt: Union[Dict[str, Any], List[Any], NoneType] = None) -> Generator[Tuple[numpy.ndarray, int, dict], NoneType, NoneType]",
+  "generate_voice_design": "(text: str, instruct: str, language: str, non_streaming_mode: Optional[bool] = None, max_new_tokens: int = 2048, min_new_tokens: int = 2, temperature: float = 0.9, top_k: int = 50, top_p: float = 1.0, do_sample: bool = True, repetition_penalty: float = 1.05) -> Tuple[list, int]",
+  "generate_voice_design_streaming": "(text: str, instruct: str, language: str, non_streaming_mode: Optional[bool] = None, max_new_tokens: int = 2048, min_new_tokens: int = 2, temperature: float = 0.9, top_k: int = 50, top_p: float = 1.0, do_sample: bool = True, repetition_penalty: float = 1.05, chunk_size: int = 12) -> Generator[Tuple[numpy.ndarray, int, dict], NoneType, NoneType]"
+ },
+ "gpu": "NVIDIA H100 80GB HBM3",
+ "torch": "2.10.0+cu128",
+ "cuda": "12.8",
+ "timing": [
+  {
+   "chunk_size": 2,
+   "text_idx": 0,
+   "rep": 0,
+   "ttfa_ms": 155.48297500000174,
+   "ttfa_voiced_ms": 155.48297500000174,
+   "full_s": 1.123608185000002,
+   "audio_s": 1.92,
+   "n_chunks": 12,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 1,
+   "rep": 0,
+   "ttfa_ms": 117.74999600000058,
+   "ttfa_voiced_ms": 117.74999600000058,
+   "full_s": 1.5090879420000007,
+   "audio_s": 4.08,
+   "n_chunks": 26,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 2,
+   "rep": 0,
+   "ttfa_ms": 112.52082899999749,
+   "ttfa_voiced_ms": 112.52082899999749,
+   "full_s": 1.9016489379999975,
+   "audio_s": 5.6,
+   "n_chunks": 35,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 3,
+   "rep": 0,
+   "ttfa_ms": 115.96283500000126,
+   "ttfa_voiced_ms": 115.96283500000126,
+   "full_s": 3.297296336999999,
+   "audio_s": 9.84,
+   "n_chunks": 62,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 4,
+   "rep": 0,
+   "ttfa_ms": 120.53639100000169,
+   "ttfa_voiced_ms": 120.53639100000169,
+   "full_s": 3.262644574000003,
+   "audio_s": 9.76,
+   "n_chunks": 61,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 0,
+   "rep": 1,
+   "ttfa_ms": 117.30781699999682,
+   "ttfa_voiced_ms": 117.30781699999682,
+   "full_s": 0.7490357229999987,
+   "audio_s": 2.08,
+   "n_chunks": 13,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 1,
+   "rep": 1,
+   "ttfa_ms": 106.2925729999975,
+   "ttfa_voiced_ms": 106.2925729999975,
+   "full_s": 2.3606874350000027,
+   "audio_s": 7.04,
+   "n_chunks": 44,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 2,
+   "rep": 1,
+   "ttfa_ms": 106.59914100000378,
+   "ttfa_voiced_ms": 106.59914100000378,
+   "full_s": 2.579509876000003,
+   "audio_s": 7.68,
+   "n_chunks": 48,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 3,
+   "rep": 1,
+   "ttfa_ms": 114.03941999999745,
+   "ttfa_voiced_ms": 114.03941999999745,
+   "full_s": 3.2715929960000025,
+   "audio_s": 9.76,
+   "n_chunks": 61,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 2,
+   "text_idx": 4,
+   "rep": 1,
+   "ttfa_ms": 109.30528099999748,
+   "ttfa_voiced_ms": 109.30528099999748,
+   "full_s": 3.855956877000004,
+   "audio_s": 11.6,
+   "n_chunks": 73,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 0,
+   "rep": 0,
+   "ttfa_ms": 149.19627800000512,
+   "ttfa_voiced_ms": 149.19627800000512,
+   "full_s": 0.5943238210000032,
+   "audio_s": 1.92,
+   "n_chunks": 6,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 1,
+   "rep": 0,
+   "ttfa_ms": 142.6881929999979,
+   "ttfa_voiced_ms": 142.6881929999979,
+   "full_s": 1.222729967999996,
+   "audio_s": 4.08,
+   "n_chunks": 13,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 2,
+   "rep": 0,
+   "ttfa_ms": 141.0061469999988,
+   "ttfa_voiced_ms": 141.0061469999988,
+   "full_s": 1.6052683539999961,
+   "audio_s": 5.6,
+   "n_chunks": 18,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 3,
+   "rep": 0,
+   "ttfa_ms": 141.73639899999557,
+   "ttfa_voiced_ms": 141.73639899999557,
+   "full_s": 2.770262361999997,
+   "audio_s": 9.84,
+   "n_chunks": 31,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 4,
+   "rep": 0,
+   "ttfa_ms": 142.21202099999886,
+   "ttfa_voiced_ms": 142.21202099999886,
+   "full_s": 2.7503315119999954,
+   "audio_s": 9.76,
+   "n_chunks": 31,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 0,
+   "rep": 1,
+   "ttfa_ms": 142.7301239999963,
+   "ttfa_voiced_ms": 142.7301239999963,
+   "full_s": 0.6372305780000005,
+   "audio_s": 2.08,
+   "n_chunks": 7,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 1,
+   "rep": 1,
+   "ttfa_ms": 140.79102600000226,
+   "ttfa_voiced_ms": 140.79102600000226,
+   "full_s": 1.9947060860000008,
+   "audio_s": 7.04,
+   "n_chunks": 22,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 2,
+   "rep": 1,
+   "ttfa_ms": 142.76148400000466,
+   "ttfa_voiced_ms": 142.76148400000466,
+   "full_s": 2.1887915080000013,
+   "audio_s": 7.68,
+   "n_chunks": 24,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 3,
+   "rep": 1,
+   "ttfa_ms": 151.17504599999876,
+   "ttfa_voiced_ms": 151.17504599999876,
+   "full_s": 2.7890154549999977,
+   "audio_s": 9.76,
+   "n_chunks": 31,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 4,
+   "text_idx": 4,
+   "rep": 1,
+   "ttfa_ms": 145.7268649999861,
+   "ttfa_voiced_ms": 145.7268649999861,
+   "full_s": 3.282765503999997,
+   "audio_s": 11.6,
+   "n_chunks": 37,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 0,
+   "rep": 0,
+   "ttfa_ms": 213.66635399999723,
+   "ttfa_voiced_ms": 213.66635399999723,
+   "full_s": 0.5322791739999957,
+   "audio_s": 1.92,
+   "n_chunks": 3,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 1,
+   "rep": 0,
+   "ttfa_ms": 212.10039000000336,
+   "ttfa_voiced_ms": 212.10039000000336,
+   "full_s": 1.1819726339999903,
+   "audio_s": 4.08,
+   "n_chunks": 7,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 2,
+   "rep": 0,
+   "ttfa_ms": 213.90482700000746,
+   "ttfa_voiced_ms": 213.90482700000746,
+   "full_s": 1.4999878039999999,
+   "audio_s": 5.6,
+   "n_chunks": 9,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 3,
+   "rep": 0,
+   "ttfa_ms": 213.9217819999999,
+   "ttfa_voiced_ms": 213.9217819999999,
+   "full_s": 2.5161711639999993,
+   "audio_s": 9.84,
+   "n_chunks": 16,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 4,
+   "rep": 0,
+   "ttfa_ms": 217.37608899999827,
+   "ttfa_voiced_ms": 217.37608899999827,
+   "full_s": 2.5018052699999913,
+   "audio_s": 9.76,
+   "n_chunks": 16,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 0,
+   "rep": 1,
+   "ttfa_ms": 213.79999500000224,
+   "ttfa_voiced_ms": 213.79999500000224,
+   "full_s": 0.5876166729999994,
+   "audio_s": 2.08,
+   "n_chunks": 4,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 1,
+   "rep": 1,
+   "ttfa_ms": 219.8642980000045,
+   "ttfa_voiced_ms": 219.8642980000045,
+   "full_s": 1.8209187380000031,
+   "audio_s": 7.04,
+   "n_chunks": 11,
+   "lead_silence_ms": 80.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 2,
+   "rep": 1,
+   "ttfa_ms": 215.21958499999982,
+   "ttfa_voiced_ms": 215.21958499999982,
+   "full_s": 1.9721787769999963,
+   "audio_s": 7.68,
+   "n_chunks": 12,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 3,
+   "rep": 1,
+   "ttfa_ms": 213.9043539999932,
+   "ttfa_voiced_ms": 213.9043539999932,
+   "full_s": 2.5021740699999953,
+   "audio_s": 9.76,
+   "n_chunks": 16,
+   "lead_silence_ms": 90.0
+  },
+  {
+   "chunk_size": 8,
+   "text_idx": 4,
+   "rep": 1,
+   "ttfa_ms": 214.7778969999905,
+   "ttfa_voiced_ms": 214.7778969999905,
+   "full_s": 2.9694211249999967,
+   "audio_s": 11.6,
+   "n_chunks": 19,
+   "lead_silence_ms": 80.0
+  }
+ ],
+ "nonstream": [
+  {
+   "text_idx": 0,
+   "full_s": 0.5483786619999904,
+   "audio_s": 2.08
+  },
+  {
+   "text_idx": 1,
+   "full_s": 1.1327420060000009,
+   "audio_s": 4.48
+  },
+  {
+   "text_idx": 2,
+   "full_s": 1.5194907799999982,
+   "audio_s": 6.16
+  },
+  {
+   "text_idx": 3,
+   "full_s": 2.189394128999993,
+   "audio_s": 9.12
+  },
+  {
+   "text_idx": 4,
+   "full_s": 2.353814657000001,
+   "audio_s": 9.92
+  }
+ ],
+ "by_chunk_size": {
+  "2": {
+   "ttfa_ms_median": 115.00112749999936,
+   "ttfa_voiced_ms_median": 115.00112749999936,
+   "rtf_median": 0.33559930075757616
+  },
+  "4": {
+   "ttfa_ms_median": 142.7091584999971,
+   "ttfa_voiced_ms_median": 142.7091584999971,
+   "rtf_median": 0.2853793372481216
+  },
+  "8": {
+   "ttfa_ms_median": 213.91330450000368,
+   "ttfa_voiced_ms_median": 213.91330450000368,
+   "rtf_median": 0.25772367070904356
+  }
+ },
+ "nonstream_rtf_median": 0.24667058116883087,
+ "tag": "fast-CustomVoice",
+ "n": 60,
+ "n_ok": 60,
+ "errors": [],
+ "accuracy_set_wall_s": 108.37020097699998,
+ "accuracy_set_audio_s": 453.68,
+ "accuracy_set_rtf": 0.2388692491998765,
+ "rows": [
+  {
+   "id": "1089-134686-0002",
+   "wall_s": 1.3754427340000035,
+   "audio_s": 5.6
+  },
+  {
+   "id": "672-122797-0000",
+   "wall_s": 0.6542413540000069,
+   "audio_s": 2.56
+  },
+  {
+   "id": "2830-3979-0000",
+   "wall_s": 1.5259511519999904,
+   "audio_s": 6.32
+  },
+  {
+   "id": "4992-23283-0000",
+   "wall_s": 1.4606087140000028,
+   "audio_s": 6.0
+  },
+  {
+   "id": "6930-75918-0002",
+   "wall_s": 1.2875467249999986,
+   "audio_s": 5.2
+  },
+  {
+   "id": "3575-170457-0000",
+   "wall_s": 2.809735075000006,
+   "audio_s": 12.0
+  },
+  {
+   "id": "8555-284447-0000",
+   "wall_s": 2.6186986080000025,
+   "audio_s": 11.12
+  },
+  {
+   "id": "8224-274381-0011",
+   "wall_s": 1.2162129139999962,
+   "audio_s": 4.96
+  },
+  {
+   "id": "1188-133604-0001",
+   "wall_s": 2.524076105000006,
+   "audio_s": 10.72
+  },
+  {
+   "id": "4970-29093-0007",
+   "wall_s": 2.0706872989999994,
+   "audio_s": 8.56
+  },
+  {
+   "id": "1995-1826-0000",
+   "wall_s": 2.8435268759999985,
+   "audio_s": 12.08
+  },
+  {
+   "id": "1320-122612-0001",
+   "wall_s": 2.3091267360000103,
+   "audio_s": 9.92
+  },
+  {
+   "id": "237-126133-0002",
+   "wall_s": 3.267341363,
+   "audio_s": 14.0
+  },
+  {
+   "id": "2961-960-0001",
+   "wall_s": 1.614429960999999,
+   "audio_s": 6.64
+  },
+  {
+   "id": "3570-5694-0001",
+   "wall_s": 1.3996255359999878,
+   "audio_s": 5.68
+  },
+  {
+   "id": "8463-287645-0000",
+   "wall_s": 1.2067896049999973,
+   "audio_s": 4.8
+  },
+  {
+   "id": "5105-28233-0000",
+   "wall_s": 0.8998946269999948,
+   "audio_s": 3.52
+  },
+  {
+   "id": "908-157963-0005",
+   "wall_s": 1.942557671000003,
+   "audio_s": 8.08
+  },
+  {
+   "id": "5142-33396-0001",
+   "wall_s": 1.4930903409999843,
+   "audio_s": 6.08
+  },
+  {
+   "id": "4077-13751-0000",
+   "wall_s": 1.9077262359999736,
+   "audio_s": 7.92
+  },
+  {
+   "id": "2094-142345-0001",
+   "wall_s": 2.4122999379999897,
+   "audio_s": 10.24
+  },
+  {
+   "id": "8230-279154-0000",
+   "wall_s": 2.634102904999992,
+   "audio_s": 11.2
+  },
+  {
+   "id": "1221-135766-0002",
+   "wall_s": 1.4689414779999765,
+   "audio_s": 6.16
+  },
+  {
+   "id": "7729-102255-0002",
+   "wall_s": 1.9955693999999937,
+   "audio_s": 8.56
+  },
+  {
+   "id": "2300-131720-0000",
+   "wall_s": 1.190103033999975,
+   "audio_s": 4.72
+  },
+  {
+   "id": "1284-1180-0000",
+   "wall_s": 1.993805617999982,
+   "audio_s": 8.4
+  },
+  {
+   "id": "8455-210777-0000",
+   "wall_s": 3.455964014000017,
+   "audio_s": 14.88
+  },
+  {
+   "id": "1580-141083-0000",
+   "wall_s": 3.1266391340000155,
+   "audio_s": 13.44
+  },
+  {
+   "id": "6829-68769-0001",
+   "wall_s": 2.226510578000017,
+   "audio_s": 9.36
+  },
+  {
+   "id": "4446-2271-0001",
+   "wall_s": 1.8680735729999753,
+   "audio_s": 7.84
+  },
+  {
+   "id": "260-123286-0000",
+   "wall_s": 1.3102185529999986,
+   "audio_s": 5.36
+  },
+  {
+   "id": "7021-79730-0005",
+   "wall_s": 2.0537584970000182,
+   "audio_s": 8.64
+  },
+  {
+   "id": "4507-16021-0003",
+   "wall_s": 0.8650530330000095,
+   "audio_s": 3.52
+  },
+  {
+   "id": "5683-32865-0004",
+   "wall_s": 2.0065808049999987,
+   "audio_s": 8.64
+  },
+  {
+   "id": "7127-75946-0003",
+   "wall_s": 1.2148268480000013,
+   "audio_s": 4.88
+  },
+  {
+   "id": "7176-88083-0000",
+   "wall_s": 1.4639366119999977,
+   "audio_s": 6.16
+  },
+  {
+   "id": "3729-6852-0002",
+   "wall_s": 2.126253795000025,
+   "audio_s": 9.12
+  },
+  {
+   "id": "121-121726-0000",
+   "wall_s": 1.8215971879999984,
+   "audio_s": 7.2
+  },
+  {
+   "id": "61-70968-0000",
+   "wall_s": 1.4393330850000154,
+   "audio_s": 5.92
+  },
+  {
+   "id": "5639-40744-0002",
+   "wall_s": 1.7711938559999965,
+   "audio_s": 7.28
+  },
+  {
+   "id": "1089-134686-0015",
+   "wall_s": 1.1600034370000003,
+   "audio_s": 4.8
+  },
+  {
+   "id": "672-122797-0017",
+   "wall_s": 1.1570657659999881,
+   "audio_s": 4.8
+  },
+  {
+   "id": "2830-3980-0005",
+   "wall_s": 1.9184895470000072,
+   "audio_s": 8.0
+  },
+  {
+   "id": "4992-23283-0011",
+   "wall_s": 0.9508150019999846,
+   "audio_s": 3.68
+  },
+  {
+   "id": "6930-76324-0004",
+   "wall_s": 2.0160825110000076,
+   "audio_s": 8.64
+  },
+  {
+   "id": "3575-170457-0011",
+   "wall_s": 1.6808299120000072,
+   "audio_s": 6.96
+  },
+  {
+   "id": "8555-284447-0008",
+   "wall_s": 2.1295207139999945,
+   "audio_s": 8.96
+  },
+  {
+   "id": "8224-274384-0013",
+   "wall_s": 1.0845475070000248,
+   "audio_s": 4.48
+  },
+  {
+   "id": "1188-133604-0031",
+   "wall_s": 0.9608802090000097,
+   "audio_s": 3.76
+  },
+  {
+   "id": "4970-29093-0020",
+   "wall_s": 1.0775201989999914,
+   "audio_s": 4.48
+  },
+  {
+   "id": "1995-1826-0013",
+   "wall_s": 2.140744892000015,
+   "audio_s": 9.04
+  },
+  {
+   "id": "1320-122612-0008",
+   "wall_s": 2.099292047000006,
+   "audio_s": 9.04
+  },
+  {
+   "id": "237-126133-0012",
+   "wall_s": 1.244727513000015,
+   "audio_s": 5.2
+  },
+  {
+   "id": "2961-960-0017",
+   "wall_s": 1.571162496999989,
+   "audio_s": 6.64
+  },
+  {
+   "id": "3570-5694-0018",
+   "wall_s": 3.216179242999999,
+   "audio_s": 14.0
+  },
+  {
+   "id": "8463-287645-0013",
+   "wall_s": 1.8049201970000013,
+   "audio_s": 7.52
+  },
+  {
+   "id": "5105-28240-0003",
+   "wall_s": 1.453255882999997,
+   "audio_s": 6.16
+  },
+  {
+   "id": "908-157963-0017",
+   "wall_s": 1.1065812569999878,
+   "audio_s": 4.4
+  },
+  {
+   "id": "5142-33396-0024",
+   "wall_s": 2.622786149999996,
+   "audio_s": 11.04
+  },
+  {
+   "id": "4077-13754-0003",
+   "wall_s": 2.102724918000007,
+   "audio_s": 8.8
+  }
+ ]
+}
