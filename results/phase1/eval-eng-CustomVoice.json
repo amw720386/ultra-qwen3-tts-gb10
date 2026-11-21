@@ -4,9 +4,9 @@
  "sim_model": null,
  "n_eval": 60,
  "n_missing": 0,
- "wer_corpus": 0.017132551848512173,
- "wer_mean_utt": 0.0202802965915711,
- "n_utt_wer_gt_20pct": 2,
+ "wer_corpus": 0.019837691614066726,
+ "wer_mean_utt": 0.022609895097640196,
+ "n_utt_wer_gt_20pct": 1,
  "sim_mean": null,
  "rows": [
   {
@@ -60,7 +60,7 @@
   {
    "id": "1188-133604-0001",
    "ref": "they unite every quality and sometimes you will find me referring to them as colorists sometimes as chiaroscurists",
-   "hyp": "they unite every quality and sometimes you will find me referring to them as colorists sometimes as kiroscurists",
+   "hyp": "they unite every quality and sometimes you will find me referring to them as colorists sometimes as kirskurists",
    "wer": 0.05555555555555555
   },
   {
@@ -114,8 +114,8 @@
   {
    "id": "908-157963-0005",
    "ref": "like the doves voice like transient day like music in the air ah",
-   "hyp": "like the dove is voice like transient day like music in the air",
-   "wer": 0.23076923076923078
+   "hyp": "like the doves voiced like transient day like music in the air ah",
+   "wer": 0.07692307692307693
   },
   {
    "id": "5142-33396-0001",
@@ -132,8 +132,8 @@
   {
    "id": "2094-142345-0001",
    "ref": "but the windows are patched with wooden panes and the door i think is like the gate it is never opened",
-   "hyp": "but the windows are patched with wooden panes and the door i think is like the gate it is never opened",
-   "wer": 0.0
+   "hyp": "but the windows are patched with wooden panes and the door i think is like the gate it is never open",
+   "wer": 0.047619047619047616
   },
   {
    "id": "8230-279154-0000",
@@ -156,8 +156,8 @@
   {
    "id": "2300-131720-0000",
    "ref": "the paris plant like that at the crystal palace was a temporary exhibit",
-   "hyp": "the paris plant like that at the crystal palace was a temporary exhibit",
-   "wer": 0.0
+   "hyp": "a parish plant like that at the crystal palace was a temporary exhibit",
+   "wer": 0.15384615384615385
   },
   {
    "id": "1284-1180-0000",
@@ -216,14 +216,14 @@
   {
    "id": "7127-75946-0003",
    "ref": "gentlemen to your posts whereupon saint aignan and villeroy took their leave",
-   "hyp": "gentlemen to your posts whereupon saint yenyon and vilaroy took their leave",
+   "hyp": "gentlemen to your posts whereupon saint nyon and vilaroy took their leave",
    "wer": 0.16666666666666666
   },
   {
    "id": "7176-88083-0000",
    "ref": "all about him was a tumult of bright and broken color scattered in broad splashes",
-   "hyp": "all about him was a tumult of buried broken color scattered in broad splashes",
-   "wer": 0.13333333333333333
+   "hyp": "all about him was a tumult of bright and broken color scattered in broad splashes",
+   "wer": 0.0
   },
   {
    "id": "3729-6852-0002",
@@ -234,8 +234,8 @@
   {
    "id": "121-121726-0000",
    "ref": "also a popular contrivance whereby love making may be suspended but not stopped during the picnic season",
-   "hyp": "also a popular contrivance whereby lovemaking may be suspended but not stopped during the picnic season",
-   "wer": 0.11764705882352941
+   "hyp": "also a popular contravance whereby lovemaking may be suspended but not stopped during the picnic season",
+   "wer": 0.17647058823529413
   },
   {
    "id": "61-70968-0000",
@@ -246,8 +246,8 @@
   {
    "id": "5639-40744-0002",
    "ref": "rodolfo and his companions with their faces muffled in their cloaks stared rudely and insolently at the mother the daughter and the servant maid",
-   "hyp": "rodolfo and his companions with their faces muffled in their cloaks stared rudely and insolently at the mother the daughter and the servant maid",
-   "wer": 0.0
+   "hyp": "rodolpho and his companions with their faces muffled in their cloaks stared rudely and insolently at the mother the daughter and the servant maid",
+   "wer": 0.041666666666666664
   },
   {
    "id": "1089-134686-0015",
@@ -306,8 +306,8 @@
   {
    "id": "4970-29093-0020",
    "ref": "why it is in missouri somewhere on the frontier i think we will get a map",
-   "hyp": "why it is in missouri somewhere on the frontier i think we will get a map",
-   "wer": 0.0
+   "hyp": "wyatt is in missouri somewhere on the frontier i think we will get a map",
+   "wer": 0.125
   },
   {
    "id": "1995-1826-0013",

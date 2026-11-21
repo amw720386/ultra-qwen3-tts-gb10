@@ -80,7 +80,7 @@ class _Stack:
         self.norm = norm.weight
 
     def forward(self, x, cos, sin, kc, vc, write, S, mask):
-        """x [T, D]. kc/vc [layers, n_kv, S_max, hd]. write(kc_l, vc_l, k, v) stores new K/V."""
+        """x [T, D]. kc/vc [layers, n_kv, S_max, hd]. write(layer, k, v) stores new K/V."""
         T = x.shape[0]
         for i, p in enumerate(self.L):
             h = _rms(x, p["ln1"], self.eps)
@@ -90,7 +90,7 @@ class _Stack:
             v = v.view(T, self.nkv, self.hd)
             q = q * cos[:, None] + _rot_half(q) * sin[:, None]
             k = k * cos[:, None] + _rot_half(k) * sin[:, None]
-            write(kc[i], vc[i], k, v)
+            write(i, k, v)
             o = _attn(q, kc[i, :, :S], vc[i, :, :S], mask, self.nkv)
             x = x + F.linear(o, p["wo"])
             h = _rms(x, p["ln2"], self.eps)
@@ -123,9 +123,11 @@ class Engine:
     KV_BUCKETS = (256, 512, 768, 1024, 1536, 2048, 3072, 4096)
 
     def __init__(self, tts, max_len: int = 2048, sampling: SamplingCfg | None = None,
-                 compile: bool = True, graph_decoder: bool = True):
+                 compile: bool = True, graph_decoder: bool = True, triton_sampler: bool = True,
+                 fused_cp: bool = True):
         self.tts = tts
         m = tts.model
+        m.requires_grad_(False)
         self.m = m
         t = m.talker
         tc = m.config.talker_config
@@ -178,9 +180,11 @@ class Engine:
         self.trail = torch.zeros(max_len, D, device=dev, dtype=dt)
         self.codes = torch.zeros(max_len, self.n_groups, dtype=torch.long, device=dev)
         self.graphs: dict = {}
+        self.triton_sampler = triton_sampler
         self.pos_host = 0
         self.frames_host = 0
         self._pool = None
+        self.inp = torch.zeros(1, D, device=dev, dtype=dt)
         self.pf_emb = torch.zeros(max_len, D, device=dev, dtype=dt)
         self.pf_len = torch.ones(1, dtype=torch.long, device=dev)
         self.ban_first = torch.tensor([self.s.min_new_tokens > 0], device=dev)
@@ -197,8 +201,16 @@ class Engine:
             dynamo.config.cache_size_limit = 128
             self._frame_c = torch.compile(self._frame, fullgraph=True, dynamic=False)
             self._prefill_c = torch.compile(self._prefill_core, fullgraph=True, dynamic=False)
+            self._talker_fused_c = torch.compile(self._talker_fused, fullgraph=True, dynamic=False)
         else:
             self._frame_c, self._prefill_c = self._frame, self._prefill_core
+            self._talker_fused_c = self._talker_fused
+        self.fcp = None
+        if fused_cp and dt == torch.bfloat16:
+            from uqt.fused_cp import FusedCodePredictor
+            self.fcp = FusedCodePredictor(cp, max_batch=1)
+            self.fcodes = torch.zeros(1, self.n_groups, dtype=torch.long, device=dev)
+            self.fcp_u = torch.empty(1, self.n_groups - 1, cpc.vocab_size, device=dev, dtype=torch.float32)
 
     # ------------------------------------------------------------------ prompt
 
@@ -248,6 +260,10 @@ class Engine:
         """logits fp32 [V] -> [1] long. Top-k + exponential race == softmax-multinomial over top-k."""
         if greedy:
             return logits.argmax(-1, keepdim=True)
+        if self.triton_sampler:
+            from uqt import kernels
+            u = torch.rand(logits.shape[-1], device=logits.device, dtype=torch.float32)
+            return kernels.topk_sample(logits, u, 1.0 / temperature, top_k)
         v, idx = torch.topk(logits / temperature, top_k)
         p = torch.softmax(v, dim=-1)
         e = torch.empty_like(p).exponential_()
@@ -264,16 +280,18 @@ class Engine:
 
     # ------------------------------------------------------------------ core
 
-    def _write_static(self, start):
-        def w(kc, vc, k, v):
-            T = k.shape[0]
-            kc[:, start:start + T].copy_(k.transpose(0, 1))
-            vc[:, start:start + T].copy_(v.transpose(0, 1))
+    @staticmethod
+    def _write_static(kc, vc, start):
+        from uqt import kernels
+
+        def w(i, k, v):
+            kernels.kv_write_static(kc, vc, k, v, i, start)
         return w
 
-    def _write_dyn(self, kc, vc, k, v):
-        kc.index_copy_(1, self.pos, k.transpose(0, 1))
-        vc.index_copy_(1, self.pos, v.transpose(0, 1))
+    def _write_dyn(self, i, k, v):
+        from uqt import kernels
+
+        kernels.kv_write_dyn(self.kc, self.vc, k, v, self.pos, i)
 
     def _causal(self, T):
         return torch.full((T, T), float("-inf"), device=self.dev, dtype=self.dtype).triu(1)
@@ -281,15 +299,15 @@ class Engine:
     def _proj(self, x):
         return x if self.proj_w is None else F.linear(x, self.proj_w, self.proj_b)
 
-    def _frame(self, Lb):
-        """One codec frame: code predictor for the current code0, then one Talker step."""
+    def _frame_cp(self):
+        """Code predictor for the current code0 -> codes row + next Talker input embedding."""
         s = self.s
         C = self.cp
         c0 = self.code0
         e0 = F.embedding(c0, self.t_emb)
         x = self._proj(torch.cat([self.hidden, e0], 0))
         h = C.forward(x, self.c_cos[:2], self.c_sin[:2], self.ckc, self.cvc,
-                      self._write_static(0), 2, self._causal(2))
+                      self._write_static(self.ckc, self.cvc, 0), 2, self._causal(2))
         codes, embs = [c0], [e0]
         c = self._sample(F.linear(h[-1:], self.cp_head[0])[0].float(), s.cp_temperature, s.cp_top_k, s.cp_greedy)
         for j in range(1, self.n_groups - 1):
@@ -297,13 +315,21 @@ class Engine:
             e = F.embedding(c, self.cp_emb[j - 1])
             embs.append(e)
             h = C.forward(self._proj(e), self.c_cos[j + 1:j + 2], self.c_sin[j + 1:j + 2], self.ckc, self.cvc,
-                          self._write_static(j + 1), j + 2, None)
+                          self._write_static(self.ckc, self.cvc, j + 1), j + 2, None)
             c = self._sample(F.linear(h, self.cp_head[j])[0].float(), s.cp_temperature, s.cp_top_k, s.cp_greedy)
         codes.append(c)
         embs.append(F.embedding(c, self.cp_emb[self.n_groups - 2]))
         self.codes.index_copy_(0, self.fidx, torch.cat(codes)[None])
+        self.inp.copy_(torch.cat(embs, 0).sum(0, keepdim=True) + self.trail.index_select(0, self.step))
 
-        inp = torch.cat(embs, 0).sum(0, keepdim=True) + self.trail.index_select(0, self.step)
+    def _frame(self, Lb):
+        """One codec frame: code predictor for the current code0, then one Talker step."""
+        self._frame_cp()
+        self._frame_talker(Lb)
+
+    def _frame_talker(self, Lb):
+        s = self.s
+        inp = self.inp
         cos = self.t_cos.index_select(0, self.pos)
         sin = self.t_sin.index_select(0, self.pos)
         mask = torch.zeros(1, Lb, device=self.dev, dtype=self.dtype).masked_fill(
@@ -352,7 +378,32 @@ class Engine:
         self.graphs[key] = g
         return g
 
+    def _fcp_step(self):
+        """Fused Triton code predictor (vLLM-Omni port): writes self.fcodes [1, 16]."""
+        s = self.s
+        if s.cp_greedy:
+            self.fcp_u.fill_(0.5)  # constant Gumbel noise -> argmax
+            inv_t, k = 1.0, 0
+        else:
+            self.fcp_u.uniform_()
+            inv_t, k = 1.0 / s.cp_temperature, s.cp_top_k
+        e0 = F.embedding(self.code0, self.t_emb)
+        self.fcodes.copy_(self.fcp(self.code0, e0, self.hidden, inv_t, k, self.fcp_u))
+
+    def _talker_fused(self, Lb):
+        c = self.fcodes[0]
+        embs = [F.embedding(c[:1], self.t_emb)] + [F.embedding(c[i:i + 1], self.cp_emb[i - 1])
+                                                    for i in range(1, self.n_groups)]
+        self.codes.index_copy_(0, self.fidx, self.fcodes)
+        self.inp.copy_(torch.stack(embs, 0).sum(0) + self.trail.index_select(0, self.step))
+        self._frame_talker(Lb)
+
     def _run_frames(self, K, Lb, compiled=True):
+        if self.fcp is not None and compiled:
+            for _ in range(K):
+                self._fcp_step()
+                self._talker_fused_c(Lb)
+            return
         f = self._frame_c if compiled else self._frame
         for _ in range(K):
             f(Lb)
@@ -368,7 +419,7 @@ class Engine:
         ever attended (decode attends to positions <= p only).
         """
         h = self.talker.forward(self.pf_emb[:Tb], self.t_cos[:Tb], self.t_sin[:Tb], self.kc, self.vc,
-                                self._write_static(0), Tb, self._causal(Tb))
+                                self._write_static(self.kc, self.vc, 0), Tb, self._causal(Tb))
         hl = h.index_select(0, self.pf_len - 1)
         self.seen.zero_()
         c = self._talker_logits(hl, self.ban_first)

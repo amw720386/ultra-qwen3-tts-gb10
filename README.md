@@ -40,3 +40,42 @@ Notes:
   multiple seeds before any parity claim.
 - Several residual errors are reference-text quirks in LibriSpeech ("shewd", "emerg would") that
   every system, including ground truth, gets "wrong".
+
+## Phase 1: uqt engine
+
+`uqt/engine.py` reuses the official package for weights, tokenization, prompt construction and the
+codec, and replaces the generation loop:
+
+- static KV caches, one CUDA graph per chunk of K frames, no host sync inside a chunk;
+- `torch.compile`d Talker step, with KV writes as opaque in-place custom ops (otherwise inductor
+  copies a whole layer cache per write);
+- fused Triton code predictor with programmatic dependent launch (`uqt/fused_cp.py`, ported from
+  vLLM-Omni, Apache-2.0) and a single-kernel top-k sampler (`uqt/kernels.py`);
+- prompt prefill graphed over padded length buckets; codec decoder graphed per window size and run
+  on its own stream, overlapped with generation of the next chunk; chunk sizes ramp 1, 2, 4, 8.
+
+Correctness: with greedy decoding in fp32 the engine reproduces the official codes exactly
+(6 prompts, up to 119 frames each, `modal run bench/phase1.py::parity_all`). In bf16, kernel
+rounding differences make greedy outputs diverge after a few frames (the same happens between
+eager and compiled PyTorch), so bf16 accuracy is judged by WER/SIM.
+
+```powershell
+modal run bench/phase1.py::bench_all --n 60
+```
+
+H100 80GB HBM3, bf16, batch 1. TTFA includes prompt construction (cached voice prompt) and is
+measured on the host when the first PCM chunk is available.
+
+| System | Variant | Gen ms / frame | TTFA (first chunk) | TTFA (voiced) | RTF (streaming) | WER | SIM (proxy) |
+|---|---|---|---|---|---|---|---|
+| faster-qwen3-tts 0.5.4 | Base | ~21 | 97 ms | 97 ms | 0.293 | 1.26% | 0.945 |
+| faster-qwen3-tts 0.5.4 | CustomVoice | ~21 | 115 ms | 115 ms | 0.258 | 2.71% | - |
+| uqt (phase 1) | Base | 3.66 | 15.5 ms | 37.6 ms | 0.057 | 1.53% | 0.953 |
+| uqt (phase 1) | CustomVoice | 3.85 | 13.5 ms | 17.4 ms | 0.057 | 1.98% | - |
+
+Per-frame breakdown (CustomVoice, graphed): fused code predictor 1.83 ms (15 dependent steps),
+Talker step 2.06 ms. "Voiced" TTFA waits for the first chunk containing audio above -40 dBFS; the
+Base model emits ~80-300 ms of leading silence on this voice, as the official implementation does.
+
+Open question: CustomVoice WER is 1.5-2.0% across three engine runs against 1.35% for the official
+implementation on 60 utterances; a larger multi-seed set is needed before claiming parity or a gap.

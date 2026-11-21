@@ -21,8 +21,9 @@ CU128 = "https://download.pytorch.org/whl/cu128"
 img = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("sox", "libsox-dev", "ffmpeg", "libsndfile1")
-    .pip_install("torch==2.8.0", "torchaudio==2.8.0", extra_index_url=CU128)
+    .pip_install("torch==2.9.1", "torchaudio==2.9.1", extra_index_url=CU128)
     .pip_install("qwen-tts==0.1.1", "soundfile", "numpy")
+    .run_commands("python -c \"import torch, triton; print(torch.__version__, triton.__version__)\"")
     .add_local_python_source("uqt")
 )
 
@@ -257,3 +258,152 @@ def bench_all(n: int = 60, variants: str = "Base,CustomVoice"):
         print(f"[{v}] gen ms/frame={r['gen_ms_per_frame']} prefill={r['prefill_ms']:.1f}ms build={r['build_prompt_ms']:.1f}ms "
               f"dec8={r['decode_ms_8frames']:.1f}ms dec2={r['decode_ms_2frames']:.1f}ms")
         print(f"[{v}] {json.dumps(r['by_first_chunk'])} acc-set RTF={r['accuracy_set_rtf']:.3f}")
+
+
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=3600)
+def profile(variant: str = "CustomVoice"):
+    """Per-frame breakdown: code predictor vs Talker, graphed timing and kernel-level GPU time."""
+    import torch
+    with torch.inference_mode():
+        return _profile_body(variant)
+
+
+def _profile_body(variant):
+    import torch
+    from torch.profiler import ProfilerActivity, profile as tprof
+    from uqt.common import TIMING_TEXTS
+    from uqt.engine import Engine
+
+    tts = _load(variant, "bf16")
+    eng = Engine(tts, max_len=2048)
+    man = json.load(open("/data/manifest.json"))
+    kind = "clone" if variant == "Base" else "custom"
+    call = (dict(text=TIMING_TEXTS[3], language="English",
+                 voice_clone_prompt=tts.create_voice_clone_prompt(ref_audio=man[0]["prompt_wav"], ref_text=man[0]["prompt_text"]))
+            if kind == "clone" else dict(text=TIMING_TEXTS[3], language="English", speaker="Ryan"))
+    p = eng.build_prompt(kind, **call)
+    out = {"prompt_len": int(p.embeds.shape[0])}
+    cp_c = torch.compile(eng._frame_cp, fullgraph=True, dynamic=False)
+    tk_c = torch.compile(eng._frame_talker, fullgraph=True, dynamic=False)
+    parts = {"cp_compiled": cp_c, "talker512_compiled": lambda: tk_c(512),
+             "cp_eager": eng._frame_cp, "talker512_eager": lambda: eng._frame_talker(512)}
+    for name, fn in parts.items():
+        eng.prefill(p)
+        g = eng._capture(("prof", name), fn)
+        torch.cuda.synchronize()
+        t = time.perf_counter()
+        for _ in range(200):
+            g.replay()
+        torch.cuda.synchronize()
+        out[f"{name}_graph_ms"] = (time.perf_counter() - t) * 1000 / 200
+    # kernel-level view (compiled, not graphed)
+    for name, fn in (("cp_compiled", cp_c), ("talker512_compiled", lambda: tk_c(512))):
+        eng.prefill(p)
+        fn(); torch.cuda.synchronize()
+        with tprof(activities=[ProfilerActivity.CUDA]) as prof:
+            for _ in range(10):
+                fn()
+            torch.cuda.synchronize()
+        ev = [e for e in prof.key_averages() if e.device_type.name == "CUDA"]
+        tot = sum(e.self_device_time_total for e in ev) / 10 / 1000
+        cnt = sum(e.count for e in ev) / 10
+        top = sorted(ev, key=lambda e: -e.self_device_time_total)[:12]
+        out[f"{name}_kernels_per_call"] = cnt
+        out[f"{name}_gpu_busy_ms"] = tot
+        out[f"{name}_top"] = [(e.key[:90], e.count // 10, round(e.self_device_time_total / 10 / 1000, 4)) for e in top]
+    print(json.dumps(out, indent=1))
+    return out
+
+
+@app.function(image=img, gpu=GPU, timeout=1800)
+def sampler_test(n: int = 40000):
+    """Total-variation distance between the Triton top-k sampler and torch topk+multinomial."""
+    import torch
+    from uqt import kernels
+
+    torch.manual_seed(0)
+    out = {}
+    for V, k, temp in ((2048, 50, 0.9), (3072, 50, 0.9), (2048, 5, 1.3)):
+        logits = torch.randn(V, device="cuda") * 3
+        ref = torch.zeros(V, device="cuda")
+        v, idx = torch.topk(logits / temp, k)
+        p = torch.softmax(v, -1)
+        exact = torch.zeros(V, device="cuda").scatter_(0, idx, p)
+        draws = torch.multinomial(p, n, replacement=True)
+        ref.scatter_add_(0, idx[draws], torch.ones(n, device="cuda"))
+        tri = torch.zeros(V, device="cuda")
+        for _ in range(n):
+            u = torch.rand(V, device="cuda")
+            tri[kernels.topk_sample(logits, u, 1.0 / temp, k)] += 1
+        ref, tri = ref / n, tri / n
+        out[f"V{V}_k{k}_t{temp}"] = {"tv_triton_vs_exact": float(0.5 * (tri - exact).abs().sum()),
+                                     "tv_torch_vs_exact": float(0.5 * (ref - exact).abs().sum()),
+                                     "support_ok": bool(((tri > 0) <= (exact > 0)).all())}
+    print(json.dumps(out, indent=1))
+    return out
+
+
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=3600)
+def fcp_test(variant: str = "CustomVoice", frames: int = 120):
+    """Fused (vLLM-Omni port) vs reference code predictor: greedy agreement on real frames + timing."""
+    import torch
+    with torch.inference_mode():
+        from uqt.common import TIMING_TEXTS
+        from uqt.engine import Engine, SamplingCfg
+
+        tts = _load(variant, "bf16")
+        eng = Engine(tts, max_len=2048, sampling=SamplingCfg(cp_greedy=True))
+        assert eng.fcp is not None
+        man = json.load(open("/data/manifest.json"))
+        kind = "clone" if variant == "Base" else "custom"
+        call = (dict(text=TIMING_TEXTS[4], language="English",
+                     voice_clone_prompt=tts.create_voice_clone_prompt(ref_audio=man[0]["prompt_wav"], ref_text=man[0]["prompt_text"]))
+                if kind == "clone" else dict(text=TIMING_TEXTS[4], language="English", speaker="Ryan"))
+        p = eng.build_prompt(kind, **call)
+        eng.prefill(p, use_graph=False)
+        eq_codes, eq_rows, n = 0, 0, 0
+        first_mis = {"fused": [], "compiled": []}
+        cp_c = torch.compile(eng._frame_cp, fullgraph=True, dynamic=False)
+
+        def first_mismatch(a, b):
+            bad = (a != b).nonzero()
+            return int(bad[0]) if len(bad) else 16
+
+        for f in range(frames):
+            cp_c()                               # compiled reference (calibration of bf16 noise)
+            comp = eng.codes[f].clone()
+            eng._frame_cp()                      # eager reference (writes self.codes[fidx], self.inp)
+            ref = eng.codes[f].clone()
+            eng._fcp_step()                      # fused, same inputs (code0, hidden unchanged)
+            fused = eng.fcodes[0].clone()
+            first_mis["fused"].append(first_mismatch(ref, fused))
+            first_mis["compiled"].append(first_mismatch(ref, comp))
+            eq_codes += int((ref == fused).sum()); eq_rows += int((ref == fused).all()); n += 1
+            eng._frame_talker(eng._bucket(eng.pos_host + 1))   # advance with the reference codes
+            eng.pos_host += 1; eng.frames_host += 1
+            if int(eng.code0) == eng.eos:
+                break
+        out = {"frames": n, "frac_codes_equal": eq_codes / (16 * n), "frac_frames_equal": eq_rows / n}
+        for k, v in first_mis.items():
+            # P(code i equal | codes < i equal), i = 1..15 (code 0 is shared input)
+            cond = []
+            for i in range(1, 16):
+                reach = sum(1 for m in v if m >= i)
+                cond.append(round(sum(1 for m in v if m > i) / reach, 3) if reach else None)
+            out[f"{k}_cond_agree_by_pos"] = cond
+            out[f"{k}_frames_equal"] = sum(1 for m in v if m == 16) / len(v)
+        # timing (sampling mode)
+        eng.s.cp_greedy = False
+        tk = torch.compile(eng._talker_fused, fullgraph=True, dynamic=False)
+        for name, fn in {"fcp": eng._fcp_step, "talker_fused512": lambda: tk(512),
+                         "frame_fused512": lambda: (eng._fcp_step(), tk(512))}.items():
+            eng.prefill(p)
+            g = eng._capture(("t", name), fn)
+            torch.cuda.synchronize(); t = time.perf_counter()
+            for _ in range(200):
+                g.replay()
+            torch.cuda.synchronize()
+            out[f"{name}_graph_ms"] = (time.perf_counter() - t) * 1000 / 200
+        out["pdl"] = bool(eng.fcp._pdl_configs)
+        print(json.dumps(out, indent=1))
+        return out

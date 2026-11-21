@@ -1,0 +1,135 @@
+{
+ "prompt_len": 35,
+ "cp_compiled_graph_ms": 4.24786030000007,
+ "talker512_compiled_graph_ms": 6.60602069499987,
+ "cp_eager_graph_ms": 10.665102309999952,
+ "talker512_eager_graph_ms": 4.596390370000023,
+ "cp_compiled_kernels_per_call": 1385.0,
+ "cp_compiled_gpu_busy_ms": 3.8614395999998243,
+ "cp_compiled_top": [
+  [
+   "nvjet_tst_64x8_64x16_4x1_v_bz_TNT",
+   255,
+   1.4575
+  ],
+  [
+   "nvjet_tst_64x8_64x16_4x1_v_bz_splitK_TNT",
+   75,
+   0.3914
+  ],
+  [
+   "void at::native::sbtopk::gatherTopK<float, unsigned int, 1, false>(at::cuda::detail::Tenso",
+   15,
+   0.305
+  ],
+  [
+   "void cublasLt::splitKreduce_kernel<32, 16, int, float, __nv_bfloat16, float, __nv_bfloat16",
+   75,
+   0.1292
+  ],
+  [
+   "void cutlass::Kernel2<cutlass_75_wmma_tensorop_bf16_s161616gemm_bf16_32x32_32x1_tn_align1>",
+   35,
+   0.1155
+  ],
+  [
+   "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_32x1_tn_align2>",
+   30,
+   0.0962
+  ],
+  [
+   "triton_poi_fused_mul_silu_44",
+   70,
+   0.0809
+  ],
+  [
+   "void cutlass::Kernel2<cutlass_75_wmma_tensorop_bf16_s161616gemm_bf16_32x32_32x1_nn_align1>",
+   35,
+   0.0808
+  ],
+  [
+   "void at::native::radixSortKVInPlace<-2, -1, 32, 4, float, long, unsigned int>(at::cuda::de",
+   15,
+   0.075
+  ],
+  [
+   "void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_32x1_nn_align2>",
+   30,
+   0.065
+  ],
+  [
+   "triton_per_fused__to_copy_add_addmm_mean_mul_pow_rsqrt_36",
+   42,
+   0.0583
+  ],
+  [
+   "triton_per_fused__to_copy_add_addmm_mean_mul_pow_rsqrt_43",
+   42,
+   0.0578
+  ]
+ ],
+ "talker512_compiled_kernels_per_call": 461.0,
+ "talker512_compiled_gpu_busy_ms": 6.4675158000000135,
+ "talker512_compiled_top": [
+  [
+   "nvjet_tst_64x8_64x16_4x1_v_bz_TNT",
+   113,
+   1.2432
+  ],
+  [
+   "nvjet_tst_64x8_64x16_2x1_v_bz_splitK_TNT",
+   28,
+   0.3324
+  ],
+  [
+   "triton_poi_fused_94",
+   2,
+   0.2335
+  ],
+  [
+   "triton_poi_fused_6",
+   2,
+   0.1544
+  ],
+  [
+   "triton_poi_fused_13",
+   2,
+   0.1544
+  ],
+  [
+   "triton_poi_fused_21",
+   2,
+   0.1541
+  ],
+  [
+   "triton_poi_fused_25",
+   2,
+   0.154
+  ],
+  [
+   "triton_poi_fused_34",
+   2,
+   0.1536
+  ],
+  [
+   "triton_poi_fused_18",
+   2,
+   0.1533
+  ],
+  [
+   "triton_poi_fused_52",
+   2,
+   0.1533
+  ],
+  [
+   "triton_poi_fused_43",
+   2,
+   0.1533
+  ],
+  [
+   "triton_poi_fused_64",
+   2,
+   0.1533
+  ]
+ ]
+}
