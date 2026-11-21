@@ -76,3 +76,69 @@ def topk_sample(logits: torch.Tensor, u: torch.Tensor, inv_temp: float, top_k: i
 @topk_sample.register_fake
 def _(logits, u, inv_temp, top_k):
     return logits.new_empty(1, dtype=torch.long)
+
+
+# ----------------------------------------------------------------------------- batched (rows)
+
+@torch.library.custom_op("uqt::kv_write_rows", mutates_args=("kc", "vc"))
+def kv_write_rows(kc: torch.Tensor, vc: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
+                  pos: torch.Tensor, layer: int) -> None:
+    """kc/vc [L, S, n_kv, T, D]; k/v [B, n_kv, D]; pos [B] long. Row b writes slot b at pos[b]."""
+    B = k.shape[0]
+    rows = torch.arange(B, device=k.device)
+    kc[layer][rows, :, pos] = k
+    vc[layer][rows, :, pos] = v
+
+
+@kv_write_rows.register_fake
+def _(kc, vc, k, v, pos, layer):
+    return None
+
+
+@torch.library.custom_op("uqt::rows_write", mutates_args=("buf",))
+def rows_write(buf: torch.Tensor, idx: torch.Tensor, val: torch.Tensor) -> None:
+    """buf [S, T, ...]; idx [B] long; val [B, ...]: buf[b, idx[b]] = val[b]."""
+    B = val.shape[0]
+    buf[torch.arange(B, device=val.device), idx] = val
+
+
+@rows_write.register_fake
+def _(buf, idx, val):
+    return None
+
+
+@triton.jit
+def _topk_sample_rows_kernel(logits_ptr, u_ptr, out_ptr, V, inv_temp, TOPK: tl.constexpr, BLOCK: tl.constexpr):
+    row = tl.program_id(0).to(tl.int64)
+    offs = tl.arange(0, BLOCK)
+    m = offs < V
+    x = tl.load(logits_ptr + row * V + offs, mask=m, other=float("-inf")).to(tl.float32) * inv_temp
+    bits = x.to(tl.uint32, bitcast=True)
+    neg = (bits >> 31) == 1
+    key = tl.where(neg, ~bits, bits | 0x80000000)
+    key = tl.where(m, key, 0)
+    thr = tl.zeros((), dtype=tl.uint32)
+    for b in tl.static_range(31, -1, -1):
+        cand = thr | (1 << b)
+        cnt = tl.sum((key >= cand).to(tl.int32), axis=0)
+        thr = tl.where(cnt >= TOPK, cand, thr)
+    keep = (key >= thr) & m & (x > float("-inf"))
+    u = tl.load(u_ptr + row * V + offs, mask=m, other=0.5)
+    u = tl.minimum(tl.maximum(u, 1e-10), 1.0 - 1e-7)
+    score = tl.where(keep, x - tl.log(-tl.log(u)), float("-inf"))
+    tl.store(out_ptr + row, tl.argmax(score, axis=0).to(tl.int64))
+
+
+@torch.library.custom_op("uqt::topk_sample_rows", mutates_args=())
+def topk_sample_rows(logits: torch.Tensor, u: torch.Tensor, inv_temp: float, top_k: int) -> torch.Tensor:
+    """logits [B, V] contiguous, u [B, V] fp32 -> [B] long."""
+    B, V = logits.shape
+    out = torch.empty(B, dtype=torch.long, device=logits.device)
+    _topk_sample_rows_kernel[(B,)](logits, u, out, V, inv_temp, TOPK=top_k,
+                                   BLOCK=triton.next_power_of_2(V), num_warps=8)
+    return out
+
+
+@topk_sample_rows.register_fake
+def _(logits, u, inv_temp, top_k):
+    return logits.new_empty(logits.shape[0], dtype=torch.long)
