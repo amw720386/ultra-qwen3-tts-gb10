@@ -1,0 +1,433 @@
+{
+ "tag": "eng-Base",
+ "asr": "openai/whisper-large-v3 (greedy, en, Whisper EnglishTextNormalizer)",
+ "sim_model": "microsoft/wavlm-base-plus-sv (proxy, not Seed-TTS-eval's WavLM-large)",
+ "n_eval": 60,
+ "n_missing": 0,
+ "wer_corpus": 0.014427412082957619,
+ "wer_mean_utt": 0.015223518430040169,
+ "n_utt_wer_gt_20pct": 1,
+ "sim_mean": 0.9502350111802419,
+ "rows": [
+  {
+   "id": "1089-134686-0002",
+   "ref": "after early nightfall the yellow lamps would light up here and there the squalid quarter of the brothels",
+   "hyp": "after early nightfall the yellow lamps would light up here and there the squalid quarter of the brothels",
+   "wer": 0.0,
+   "sim": 0.8909327983856201
+  },
+  {
+   "id": "672-122797-0000",
+   "ref": "out in the woods stood a nice little fir tree",
+   "hyp": "out in the woods stood a nice little fir tree",
+   "wer": 0.0,
+   "sim": 0.9309731125831604
+  },
+  {
+   "id": "2830-3979-0000",
+   "ref": "we want you to help us publish some leading work of luther is for the general american market will you do it",
+   "hyp": "we want you to help us publish some leading work of luther is for the general american market will you do it",
+   "wer": 0.0,
+   "sim": 0.9351423978805542
+  },
+  {
+   "id": "4992-23283-0000",
+   "ref": "but the more forgetfulness had then prevailed the more powerful was the force of remembrance when she awoke",
+   "hyp": "but the more forgetfulness had then prevailed the more powerful was the force of remembrance when she awoke",
+   "wer": 0.0,
+   "sim": 0.9767653942108154
+  },
+  {
+   "id": "6930-75918-0002",
+   "ref": "congratulations were poured in upon the princess everywhere during her journey",
+   "hyp": "congratulations were poured in upon the princess everywhere during her journey",
+   "wer": 0.0,
+   "sim": 0.9391854405403137
+  },
+  {
+   "id": "3575-170457-0000",
+   "ref": "and often has my mother said while on her lap i laid my head she feared for time i was not made but for eternity",
+   "hyp": "and often has my mother said while on her lap i laid my head she feared for time i was not made but for eternity",
+   "wer": 0.0,
+   "sim": 0.9561151266098022
+  },
+  {
+   "id": "8555-284447-0000",
+   "ref": "then he rushed down stairs into the courtyard shouting loudly for his soldiers and threatening to patch everybody in his dominions if the sailorman was not recaptured",
+   "hyp": "then he rushed downstairs into the courtyard shouting loudly for his soldiers and threatening to patch everybody in his dominions if the sailor man was not recaptured",
+   "wer": 0.14814814814814814,
+   "sim": 0.9763174057006836
+  },
+  {
+   "id": "8224-274381-0011",
+   "ref": "his conduct and presence of mind in this emergence appeared conspicuous",
+   "hyp": "his conduct and presence of mind in this emergence appeared conspicuous",
+   "wer": 0.0,
+   "sim": 0.9388037919998169
+  },
+  {
+   "id": "1188-133604-0001",
+   "ref": "they unite every quality and sometimes you will find me referring to them as colorists sometimes as chiaroscurists",
+   "hyp": "they unite every quality and sometimes you will find me referring to them as colorists sometimes as chiaroscurists",
+   "wer": 0.0,
+   "sim": 0.9668685793876648
+  },
+  {
+   "id": "4970-29093-0007",
+   "ref": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+   "hyp": "it is such a noble ambition that it is a pity it has usually such a shallow foundation",
+   "wer": 0.0,
+   "sim": 0.9504058361053467
+  },
+  {
+   "id": "1995-1826-0000",
+   "ref": "in the debate between the senior societies her defense of the 15th amendment had been not only a notable bit of reasoning but delivered with real enthusiasm",
+   "hyp": "in the debate between the senior societies her defense of the 15th amendment had been not only a notable bit of reasoning but delivered with real enthusiasm",
+   "wer": 0.0,
+   "sim": 0.9622089862823486
+  },
+  {
+   "id": "1320-122612-0001",
+   "ref": "the dews were suffered to exhale and the sun had dispersed the mists and was shedding a strong and clear light in the forest when the travelers resumed their journey",
+   "hyp": "the dews were suffered to exhale and the sun had dispersed the mists and was shedding a strong and clear light in the forest when the travelers resumed their journey",
+   "wer": 0.0,
+   "sim": 0.9753126502037048
+  },
+  {
+   "id": "237-126133-0002",
+   "ref": "then dear said missus whitney you must be kinder to her than ever think what it would be for one of you to be away from home even among friends",
+   "hyp": "then dear said missus whitney you must be kinder to her than ever think what it would be for one of you to be away from home even among friends",
+   "wer": 0.0,
+   "sim": 0.9697010517120361
+  },
+  {
+   "id": "2961-960-0001",
+   "ref": "the influence with the timaeus has exercised upon posterity is due partly to a misunderstanding",
+   "hyp": "the influence which the timaeus has exercised upon posterity is due partly to a misunderstanding",
+   "wer": 0.06666666666666667,
+   "sim": 0.9533007144927979
+  },
+  {
+   "id": "3570-5694-0001",
+   "ref": "the utility of consumption as an evidence of wealth is to be classed as a derivative growth",
+   "hyp": "the utility of consumption as an evidence of wealth is to be classed as a derivative growth",
+   "wer": 0.0,
+   "sim": 0.9833542704582214
+  },
+  {
+   "id": "8463-287645-0000",
+   "ref": "this was what did the mischief so far as the running away was concerned",
+   "hyp": "this was what did the mischief so far as the running away was concerned",
+   "wer": 0.0,
+   "sim": 0.9845658540725708
+  },
+  {
+   "id": "5105-28233-0000",
+   "ref": "length of service 14 years 3 months and 5 days",
+   "hyp": "length of service 14 years 3 months and 5 days",
+   "wer": 0.0,
+   "sim": 0.9606784582138062
+  },
+  {
+   "id": "908-157963-0005",
+   "ref": "like the doves voice like transient day like music in the air ah",
+   "hyp": "like the dove is voice like transient day like music in the air ah",
+   "wer": 0.15384615384615385,
+   "sim": 0.8921226263046265
+  },
+  {
+   "id": "5142-33396-0001",
+   "ref": "what is your country olaf have you always been a thrall the thrall is eyes flashed",
+   "hyp": "what is your country olaf have you always been a thrall the thrall is eyes flashed",
+   "wer": 0.0,
+   "sim": 0.9568031430244446
+  },
+  {
+   "id": "4077-13751-0000",
+   "ref": "on the 6th of april 1830 the church of jesus christ of latter day saints was formally organized and thus took on a legal existence",
+   "hyp": "on the 6th of april 1830 the church of jesus christ of latter day saints was formally organized and thus took on a legal existence",
+   "wer": 0.0,
+   "sim": 0.873060405254364
+  },
+  {
+   "id": "2094-142345-0001",
+   "ref": "but the windows are patched with wooden panes and the door i think is like the gate it is never opened",
+   "hyp": "but the windows are patched with wooden panes and the door i think is like the gate it is never opened",
+   "wer": 0.0,
+   "sim": 0.9819127321243286
+  },
+  {
+   "id": "8230-279154-0000",
+   "ref": "the analysis of knowledge will occupy us until the end of the 13th lecture and is the most difficult part of our whole enterprise",
+   "hyp": "the analysis of knowledge will occupy us until the end of the 13th lecture and is the most difficult part of our whole enterprise",
+   "wer": 0.0,
+   "sim": 0.9732940196990967
+  },
+  {
+   "id": "1221-135766-0002",
+   "ref": "yet these thoughts affected hester prynne less with hope than apprehension",
+   "hyp": "yet these thoughts affected hester prynne less with hope than apprehension",
+   "wer": 0.0,
+   "sim": 0.9521552324295044
+  },
+  {
+   "id": "7729-102255-0002",
+   "ref": "that summer is emigration however being mainly from the free states greatly changed the relative strength of the 2 parties",
+   "hyp": "that summer is emigration however being mainly from the free states greatly changed the relative strength of the 2 parties",
+   "wer": 0.0,
+   "sim": 0.9587907791137695
+  },
+  {
+   "id": "2300-131720-0000",
+   "ref": "the paris plant like that at the crystal palace was a temporary exhibit",
+   "hyp": "the paris plant like that at the crystal palace was a temporary exhibit",
+   "wer": 0.0,
+   "sim": 0.9757317304611206
+  },
+  {
+   "id": "1284-1180-0000",
+   "ref": "he wore blue silk stockings blue knee pants with gold buckles a blue ruffled waist and a jacket of bright blue braided with gold",
+   "hyp": "he wore blue silk stockings blue knee pants with gold buckles a blue ruffled waist and a jacket of bright blue braided with gold",
+   "wer": 0.0,
+   "sim": 0.9516099691390991
+  },
+  {
+   "id": "8455-210777-0000",
+   "ref": "i remained there alone for many hours but i must acknowledge that before i left the chambers i had gradually brought myself to look at the matter in another light",
+   "hyp": "i remained there alone for many hours but i must acknowledge that before i left the chambers i had gradually brought myself to look at the matter in another light",
+   "wer": 0.0,
+   "sim": 0.9508105516433716
+  },
+  {
+   "id": "1580-141083-0000",
+   "ref": "i will endeavor in my statement to avoid such terms as would serve to limit the events to any particular place or give a clue as to the people concerned",
+   "hyp": "i will endeavor in my statement to avoid such terms as would serve to limit the events to any particular place or give a clue as to the people concerned",
+   "wer": 0.0,
+   "sim": 0.9540765285491943
+  },
+  {
+   "id": "6829-68769-0001",
+   "ref": "it was a serious crime indeed mister watson told them and tom gates bade fair to serve a lengthy term in state is prison as a consequence of his rash act",
+   "hyp": "it was a serious crime indeed mister watson told them and tom gates bade fair to serve a lengthy term in state is prison as a consequence of his rash act",
+   "wer": 0.0,
+   "sim": 0.9494011998176575
+  },
+  {
+   "id": "4446-2271-0001",
+   "ref": "he had preconceived ideas about everything and his idea about americans was that they should be engineers or mechanics",
+   "hyp": "he had preconceived ideas about everything and his idea about americans was that they should be engineers or mechanics",
+   "wer": 0.0,
+   "sim": 0.9635593295097351
+  },
+  {
+   "id": "260-123286-0000",
+   "ref": "saturday august 15th the sea unbroken all round no land in sight",
+   "hyp": "saturday august 15th the sea unbroken all round no land in sight",
+   "wer": 0.0,
+   "sim": 0.8477806448936462
+  },
+  {
+   "id": "7021-79730-0005",
+   "ref": "so you will be a good girl i know and not make any trouble but will stay at home contentedly will not you",
+   "hyp": "so you will be a good girl i know and not make any trouble but we will stay at home contentedly will not you",
+   "wer": 0.043478260869565216,
+   "sim": 0.9705455303192139
+  },
+  {
+   "id": "4507-16021-0003",
+   "ref": "she has a son theft and a daughter hunger",
+   "hyp": "she has a son theft and a daughter hunger",
+   "wer": 0.0,
+   "sim": 0.9026705622673035
+  },
+  {
+   "id": "5683-32865-0004",
+   "ref": "whatever lord chelford said miss brandon received it very graciously and even with a momentary smile",
+   "hyp": "whatever lord chelford said miss brandon received it very graciously and even with a momentary smile",
+   "wer": 0.0,
+   "sim": 0.9674115180969238
+  },
+  {
+   "id": "7127-75946-0003",
+   "ref": "gentlemen to your posts whereupon saint aignan and villeroy took their leave",
+   "hyp": "gentlemen to your posts whereupon saint agnan and villeroy took their leave",
+   "wer": 0.08333333333333333,
+   "sim": 0.933960497379303
+  },
+  {
+   "id": "7176-88083-0000",
+   "ref": "all about him was a tumult of bright and broken color scattered in broad splashes",
+   "hyp": "all about him was a tumult of bright and broken color scattered in broad splashes",
+   "wer": 0.0,
+   "sim": 0.9608017802238464
+  },
+  {
+   "id": "3729-6852-0002",
+   "ref": "in order to please her i spoke to her of the abbe conti and i had occasion to quote 2 lines of that profound writer",
+   "hyp": "in order to please her i spoke to her of the abbe conti and i had occasion to quote 2 lines of that profound writer",
+   "wer": 0.0,
+   "sim": 0.9726764559745789
+  },
+  {
+   "id": "121-121726-0000",
+   "ref": "also a popular contrivance whereby love making may be suspended but not stopped during the picnic season",
+   "hyp": "also a popular contrivance whereby love making may be suspended but not stopped during the picnic season",
+   "wer": 0.0,
+   "sim": 0.9428825378417969
+  },
+  {
+   "id": "61-70968-0000",
+   "ref": "he began a confused complaint against the wizard who had vanished behind the curtain on the left",
+   "hyp": "he began a confused complaint against the wizard who had vanished behind the curtain on the left",
+   "wer": 0.0,
+   "sim": 0.9695853590965271
+  },
+  {
+   "id": "5639-40744-0002",
+   "ref": "rodolfo and his companions with their faces muffled in their cloaks stared rudely and insolently at the mother the daughter and the servant maid",
+   "hyp": "rudolfo and his companions with their faces muffled in their cloaks stared rudely and insolently at the mother the daughter and the servant maid",
+   "wer": 0.041666666666666664,
+   "sim": 0.9291974306106567
+  },
+  {
+   "id": "1089-134686-0015",
+   "ref": "but the dusk deepening in the schoolroom covered over his thoughts the bell rang",
+   "hyp": "but the dusk deepening in the schoolroom covered over his thoughts the bell rang",
+   "wer": 0.0,
+   "sim": 0.9376290440559387
+  },
+  {
+   "id": "672-122797-0017",
+   "ref": "something better something still grander must follow but what",
+   "hyp": "something better something still grander must follow but what",
+   "wer": 0.0,
+   "sim": 0.9557988047599792
+  },
+  {
+   "id": "2830-3980-0005",
+   "ref": "do you suppose that god for the sake of a few lutheran heretics would disown his entire church",
+   "hyp": "do you suppose that god for the sake of a few lutheran heretics would disown his entire church",
+   "wer": 0.0,
+   "sim": 0.9284144639968872
+  },
+  {
+   "id": "4992-23283-0011",
+   "ref": "if she does not know how to estimate her own value i do",
+   "hyp": "if she does not know how to estimate her own value i do",
+   "wer": 0.0,
+   "sim": 0.964281439781189
+  },
+  {
+   "id": "6930-76324-0004",
+   "ref": "but joyce had not been listening all at once she put down her candle on the table and faced her companion",
+   "hyp": "but joyce had not been listening all at once she put down her candle on the table and faced her companion",
+   "wer": 0.0,
+   "sim": 0.9424368143081665
+  },
+  {
+   "id": "3575-170457-0011",
+   "ref": "but it is not with a view to distinction that you should cultivate this talent if you consult your own happiness",
+   "hyp": "but it is not with a view to distinction that you should cultivate this talent if you consult your own happiness",
+   "wer": 0.0,
+   "sim": 0.9624161720275879
+  },
+  {
+   "id": "8555-284447-0008",
+   "ref": "rich jewels of blue stones glittered upon their persons and the royal ladies were fully as gorgeous as they were haughty and overbearing",
+   "hyp": "rich jewels of blue stones glittered upon their persons and the royal ladies were fully as gorgeous as they were haughty and overbearing",
+   "wer": 0.0,
+   "sim": 0.9669808745384216
+  },
+  {
+   "id": "8224-274384-0013",
+   "ref": "his death in this conjuncture was a public misfortune",
+   "hyp": "his death in this conjuncture was a public misfortune",
+   "wer": 0.0,
+   "sim": 0.9771247506141663
+  },
+  {
+   "id": "1188-133604-0031",
+   "ref": "there is one and there is another the dudley and the flint",
+   "hyp": "there is one and there is another the dudley and the flint",
+   "wer": 0.0,
+   "sim": 0.9387646913528442
+  },
+  {
+   "id": "4970-29093-0020",
+   "ref": "why it is in missouri somewhere on the frontier i think we will get a map",
+   "hyp": "why it is in missouri somewhere on the frontier i think we will get a map",
+   "wer": 0.0,
+   "sim": 0.9166207909584045
+  },
+  {
+   "id": "1995-1826-0013",
+   "ref": "so for the 100th time she was thinking today as she walked alone up the lane back of the barn and then slowly down through the bottoms",
+   "hyp": "so for the 100th time she was thinking to day as she walked alone up the lane back of the barn and then slowly down through the bottoms",
+   "wer": 0.07407407407407407,
+   "sim": 0.9280717372894287
+  },
+  {
+   "id": "1320-122612-0008",
+   "ref": "the eyes of the whole party followed the unexpected movement and read their success in the air of triumph that the youth assumed",
+   "hyp": "the eyes of the whole party followed the unexpected movement and read their success in the air of triumph that the youth assumed",
+   "wer": 0.0,
+   "sim": 0.9581701755523682
+  },
+  {
+   "id": "237-126133-0012",
+   "ref": "there there he said soothingly patting her brown fuzzy head",
+   "hyp": "there there he said soothingly patting her brown fuzzy head",
+   "wer": 0.0,
+   "sim": 0.9622235298156738
+  },
+  {
+   "id": "2961-960-0017",
+   "ref": "nothing can exceed the beauty or art of the introduction in which he is using words after his accustomed manner",
+   "hyp": "nothing can exceed the beauty or art of the introduction in which he is using words after his accustomed manner",
+   "wer": 0.0,
+   "sim": 0.8694411516189575
+  },
+  {
+   "id": "3570-5694-0018",
+   "ref": "the wearers of uniforms and liveries may be roughly divided into 2 classes the free and the servile or the noble and the ignoble",
+   "hyp": "the wearers of uniforms and liveries may be roughly divided into 2 classes the free and the servile or the noble and the ignoble",
+   "wer": 0.0,
+   "sim": 0.9861496686935425
+  },
+  {
+   "id": "8463-287645-0013",
+   "ref": "as to his age and also the name of his master jacob is statement varied somewhat from the advertisement",
+   "hyp": "as to his age and also the name of his master jacob is statement varied somewhat from the advertisement",
+   "wer": 0.0,
+   "sim": 0.9916654825210571
+  },
+  {
+   "id": "5105-28240-0003",
+   "ref": "she is under sail but she is count timascheff is yacht he was right",
+   "hyp": "she is under sail but she is count timoshev is yacht he was right",
+   "wer": 0.07142857142857142,
+   "sim": 0.9501024484634399
+  },
+  {
+   "id": "908-157963-0017",
+   "ref": "the cloud then shewd his golden head and his bright form emerg would",
+   "hyp": "the cloud then showed his golden head and his bright form emerged",
+   "wer": 0.23076923076923078,
+   "sim": 0.9536608457565308
+  },
+  {
+   "id": "5142-33396-0024",
+   "ref": "i stood with my back to the wall for i wanted no sword reaching out of the dark for me",
+   "hyp": "i stood with my back to the wall for i wanted no sword reaching out of the dark for me",
+   "wer": 0.0,
+   "sim": 0.9779055118560791
+  },
+  {
+   "id": "4077-13754-0003",
+   "ref": "moreover had the people been inclined to rebellion what greater opportunity could they have wished",
+   "hyp": "moreover had the people been inclined to rebellion what greater opportunity could they have wished",
+   "wer": 0.0,
+   "sim": 0.9647698402404785
+  }
+ ]
+}

@@ -15,6 +15,7 @@ data_vol = modal.Volume.from_name("uqt-data", create_if_missing=True)
 hf_vol = modal.Volume.from_name("uqt-hf-cache", create_if_missing=True)
 VOLS = {"/data": data_vol, "/root/.cache/huggingface": hf_vol}
 GPU = "H100!"
+SCHEDULES = {"ramp1": (1, 2, 4, 8), "ramp2": (2, 4, 8), "fixed2_8": (2, 8), "fixed4": (4,)}
 CU128 = "https://download.pytorch.org/whl/cu128"
 
 img = (
@@ -138,10 +139,12 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
     voice = man[0]
     t0 = time.perf_counter()
     warm_prompt = eng.build_prompt(kind, **call_for(voice, TIMING_TEXTS[0]))
-    eng.warmup(warm_prompt, Ks=(1, 2, 4, 8), max_bucket=1024)
+    eng.warmup(warm_prompt, Ks=(1, 2, 4, 8), max_bucket=1024, prefill_max=512,
+               dec_windows=[k + left for k in (1, 2, 4, 8)])
     warm_s = time.perf_counter() - t0
-    for _ in eng.stream(warm_prompt):  # decoder warmup
-        pass
+    for sch in SCHEDULES.values():  # capture decoder windows used by each schedule
+        for _ in eng.stream(warm_prompt, schedule=sch, left=left):
+            pass
 
     # 1) pure generation speed (no decoder): ms per frame by chunk size
     gen = {}
@@ -179,7 +182,7 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
 
     # 2) end-to-end streaming latency, prompt build included
     timing = []
-    for first in (1, 2, 4):
+    for first, sch in SCHEDULES.items():
         for rep in range(2):
             for i, text in enumerate(TIMING_TEXTS):
                 torch.manual_seed(seed_for(f"t{i}-{rep}"))
@@ -187,7 +190,7 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
                 t = time.perf_counter()
                 pr = eng.build_prompt(kind, **call_for(voice, text))
                 arrivals, chunks = [], []
-                for wav in eng.stream(pr, first_chunk=first, chunk=8, left=left):
+                for wav in eng.stream(pr, schedule=sch, left=left):
                     arrivals.append(time.perf_counter() - t)
                     chunks.append(wav)
                 total = time.perf_counter() - t
@@ -214,7 +217,7 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
         torch.cuda.synchronize()
         t = time.perf_counter()
         pr = eng.build_prompt(kind, **call_for(it, it["target_text"]))
-        w = np.concatenate(list(eng.stream(pr, first_chunk=2, chunk=8, left=left)) or [np.zeros(0, np.float32)])
+        w = np.concatenate(list(eng.stream(pr, schedule=SCHEDULES['ramp1'], left=left)) or [np.zeros(0, np.float32)])
         dt = time.perf_counter() - t
         sf.write(f"{out_dir}/{it['id']}.wav", w, 24000)
         rows.append({"id": it["id"], "wall_s": dt, "audio_s": len(w) / 24000})
@@ -226,7 +229,7 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
     by_first = {f: {"ttfa_ms_median": med([t for t in timing if t["first_chunk"] == f], "ttfa_ms"),
                     "ttfa_voiced_ms_median": med([t for t in timing if t["first_chunk"] == f], "ttfa_voiced_ms"),
                     "rtf_median": float(np.median([t["full_s"] / t["audio_s"] for t in timing if t["first_chunk"] == f and t["audio_s"]]))}
-                for f in (1, 2, 4)}
+                for f in SCHEDULES}
     res = {"system": "uqt engine (phase1)", "variant": variant, "tag": tag, "left_context": left,
            "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
            "warmup_s": warm_s, "gen_ms_per_frame": gen, "build_prompt_ms": build_ms, "prefill_ms": prefill_ms,
