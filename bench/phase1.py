@@ -344,7 +344,7 @@ def sampler_test(n: int = 40000):
 
 
 @app.function(image=img, gpu=GPU, volumes=VOLS, timeout=3600)
-def fcp_test(variant: str = "CustomVoice", frames: int = 120):
+def fcp_test(variant: str = "CustomVoice", frames: int = 120, autotune: bool = False):
     """Fused (vLLM-Omni port) vs reference code predictor: greedy agreement on real frames + timing."""
     import torch
     with torch.inference_mode():
@@ -352,7 +352,7 @@ def fcp_test(variant: str = "CustomVoice", frames: int = 120):
         from uqt.engine import Engine, SamplingCfg
 
         tts = _load(variant, "bf16")
-        eng = Engine(tts, max_len=2048, sampling=SamplingCfg(cp_greedy=True))
+        eng = Engine(tts, max_len=2048, sampling=SamplingCfg(cp_greedy=True), autotune=autotune)
         assert eng.fcp is not None
         man = json.load(open("/data/manifest.json"))
         kind = "clone" if variant == "Base" else "custom"
@@ -394,7 +394,7 @@ def fcp_test(variant: str = "CustomVoice", frames: int = 120):
             out[f"{k}_frames_equal"] = sum(1 for m in v if m == 16) / len(v)
         # timing (sampling mode)
         eng.s.cp_greedy = False
-        tk = torch.compile(eng._talker_fused, fullgraph=True, dynamic=False)
+        tk = eng._talker_fused_c
         for name, fn in {"fcp": eng._fcp_step, "talker_fused512": lambda: tk(512),
                          "frame_fused512": lambda: (eng._fcp_step(), tk(512))}.items():
             eng.prefill(p)
@@ -542,3 +542,58 @@ def codec_test():
             torch.cuda.empty_cache()
     print(json.dumps(out, indent=1))
     return out
+
+
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=3600)
+def ftk_test(variant: str = "CustomVoice", frames: int = 60):
+    """Fused Talker chain vs reference Talker step: logits/hidden agreement on real frames + timing."""
+    import torch
+    import torch.nn.functional as F
+    with torch.inference_mode():
+        from uqt.common import TIMING_TEXTS
+        from uqt.engine import Engine, SamplingCfg
+
+        tts = _load(variant, "bf16")
+        eng = Engine(tts, max_len=2048, sampling=SamplingCfg(greedy=True, cp_greedy=True), fused_talker=True)
+        print("gemm configs:", eng.ftk.cfg)
+        kind = "clone" if variant == "Base" else "custom"
+        p = eng.build_prompt(kind, text=TIMING_TEXTS[4], language="English", speaker="Ryan")
+        eng.prefill(p, use_graph=False)
+        stats = []
+        for f in range(frames):
+            eng._frame_cp()
+            Lb = eng._bucket(eng.pos_host + 1)
+            lf = eng.ftk.step(eng.inp, Lb)[0].float().clone()
+            hf = eng.ftk.final_hidden().float().clone()
+            cos = eng.t_cos.index_select(0, eng.pos); sin = eng.t_sin.index_select(0, eng.pos)
+            mask = torch.zeros(1, Lb, device=eng.dev, dtype=eng.dtype).masked_fill(eng.arange[:Lb] > eng.pos, float("-inf"))
+            hr = eng.talker.forward(eng.inp, cos, sin, eng.kc, eng.vc, eng._write_dyn, Lb, mask)
+            lr = F.linear(hr, eng.head)[0].float()
+            lr_m = lr.clone(); lr_m[eng.suppress] = -1e9; lf_m = lf.clone(); lf_m[eng.suppress] = -1e9
+            stats.append({"logit_maxdiff": float((lf - lr).abs().max()), "logit_cos": float(F.cosine_similarity(lf, lr, 0)),
+                          "argmax_eq": bool(lf_m.argmax() == lr_m.argmax()),
+                          "hidden_maxdiff": float((hf - hr.float()).abs().max()),
+                          "hidden_cos": float(F.cosine_similarity(hf.reshape(-1), hr.float().reshape(-1), 0))})
+            eng._frame_talker(Lb)
+            eng.pos_host += 1; eng.frames_host += 1
+            if int(eng.code0) == eng.eos:
+                break
+        n = len(stats)
+        out = {"frames": n, "argmax_agree": sum(s["argmax_eq"] for s in stats) / n,
+               "logit_cos_min": min(s["logit_cos"] for s in stats), "logit_maxdiff_max": max(s["logit_maxdiff"] for s in stats),
+               "hidden_cos_min": min(s["hidden_cos"] for s in stats), "hidden_maxdiff_max": max(s["hidden_maxdiff"] for s in stats),
+               "cfg": {k: list(v) for k, v in eng.ftk.cfg.items()}}
+        # timing
+        eng.s.greedy = False; eng.s.cp_greedy = False
+        for name, fn in {"ftk_step512": lambda: eng.ftk.step(eng.inp, 512),
+                         "frame_fusedtalker512": lambda: eng._run_frames(1, 512),
+                         "ftk_step1024": lambda: eng.ftk.step(eng.inp, 1024)}.items():
+            eng.prefill(p)
+            g = eng._capture(("t", name), fn)
+            torch.cuda.synchronize(); t = time.perf_counter()
+            for _ in range(200):
+                g.replay()
+            torch.cuda.synchronize()
+            out[f"{name}_graph_ms"] = (time.perf_counter() - t) * 1000 / 200
+        print(json.dumps(out, indent=1))
+        return out

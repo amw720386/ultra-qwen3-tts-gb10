@@ -22,12 +22,15 @@ eval_img = (base.pip_install("torch==2.8.0", "torchaudio==2.8.0", extra_index_ur
 SHARD = 50
 
 
-def tag_of(system, variant, seed):
-    return f"L-s{seed}-{system}-{variant}"
+PREFIX = os.environ.get("UQT_TAG_PREFIX", "L")
+
+
+def tag_of(system, variant, seed, prefix=None):
+    return f"{prefix or PREFIX}-s{seed}-{system}-{variant}"
 
 
 @app.function(image=img, gpu="H100!", volumes=VOLS, timeout=3600)
-def gen_shard(system: str, variant: str, seed: int, start: int, end: int):
+def gen_shard(system: str, variant: str, seed: int, start: int, end: int, prefix: str = "L"):
     import numpy as np
     import soundfile as sf
     import torch
@@ -38,7 +41,7 @@ def gen_shard(system: str, variant: str, seed: int, start: int, end: int):
         tts = Qwen3TTSModel.from_pretrained(f"Qwen/Qwen3-TTS-12Hz-1.7B-{variant}", device_map="cuda:0",
                                             dtype=torch.bfloat16, attn_implementation="sdpa")
         man = json.load(open("/data/manifest.json"))[start:end]
-        out_dir = f"/data/gen/{tag_of(system, variant, seed)}"
+        out_dir = f"/data/gen/{tag_of(system, variant, seed, prefix)}"
         os.makedirs(out_dir, exist_ok=True)
         eng = None
         if system == "eng":
@@ -83,31 +86,37 @@ def evaluate(tag: str, n: int, with_sim: bool):
 
 
 @app.local_entrypoint()
-def main(n: int = 300, seeds: str = "1,2", systems: str = "ref,eng", variants: str = "Base,CustomVoice"):
+def main(n: int = 300, seeds: str = "1,2", systems: str = "ref,eng", variants: str = "Base,CustomVoice",
+         prefix: str = "L", ref_prefix: str = ""):
     from uqt.evaluation import paired_bootstrap
 
     combos = [(s, v, int(sd)) for s in systems.split(",") for v in variants.split(",") for sd in seeds.split(",")]
-    gens = {c: [gen_shard.spawn(*c, a, min(a + SHARD, n)) for a in range(0, n, SHARD)] for c in combos}
+    gens = {c: [gen_shard.spawn(*c, a, min(a + SHARD, n), prefix) for a in range(0, n, SHARD)] for c in combos}
     evs = {}
     for c, calls in gens.items():
         k = sum(x.get() for x in calls)
-        print(f"generated {tag_of(*c)}: {k}")
-        evs[c] = evaluate.spawn(tag_of(*c), n, c[1] == "Base")
+        print(f"generated {tag_of(*c, prefix)}: {k}")
+        evs[c] = evaluate.spawn(tag_of(*c, prefix), n, c[1] == "Base")
     res = {c: e.get() for c, e in evs.items()}
     os.makedirs("results/phase2", exist_ok=True)
     summary = {}
     for c, r in res.items():
-        json.dump(r, open(f"results/phase2/eval-{tag_of(*c)}.json", "w"), indent=1)
-        summary[tag_of(*c)] = {"wer": r["wer_corpus"], "sim": r["sim_mean"], "n": r["n_eval"]}
+        json.dump(r, open(f"results/phase2/eval-{tag_of(*c, prefix)}.json", "w"), indent=1)
+        summary[tag_of(*c, prefix)] = {"wer": r["wer_corpus"], "sim": r["sim_mean"], "n": r["n_eval"]}
     # pool seeds: rows keyed by (seed, id) so the bootstrap pairs ref/eng on the same utterance and seed
+    if ref_prefix:  # reuse earlier official-implementation results from disk
+        for v in variants.split(","):
+            for sd in seeds.split(","):
+                res[("ref", v, int(sd))] = json.load(open(f"results/phase2/eval-{tag_of('ref', v, int(sd), ref_prefix)}.json"))
+    syss = set(systems.split(",")) | ({"ref"} if ref_prefix else set())
     for v in variants.split(","):
         pooled = {}
-        for s in systems.split(","):
+        for s in syss:
             rows = []
             for sd in seeds.split(","):
                 rows += [dict(r, id=f"{sd}:{r['id']}") for r in res[(s, v, int(sd))]["rows"]]
             pooled[s] = rows
         if "ref" in pooled and "eng" in pooled:
             summary[f"{v}: eng - ref (pooled seeds)"] = paired_bootstrap(pooled["ref"], pooled["eng"])
-    json.dump(summary, open("results/phase2/eval-large-summary.json", "w"), indent=1)
+    json.dump(summary, open(f"results/phase2/eval-large-summary-{prefix}.json", "w"), indent=1)
     print(json.dumps(summary, indent=1))

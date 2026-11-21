@@ -124,7 +124,8 @@ class Engine:
 
     def __init__(self, tts, max_len: int = 2048, sampling: SamplingCfg | None = None,
                  compile: bool = True, graph_decoder: bool = True, triton_sampler: bool = True,
-                 fused_cp: bool = True, streaming_codec: bool = True):
+                 fused_cp: bool = True, streaming_codec: bool = True, autotune: bool = True,
+                 fused_talker: bool = False):
         self.tts = tts
         m = tts.model
         m.requires_grad_(False)
@@ -202,10 +203,17 @@ class Engine:
             dynamo.config.cache_size_limit = 128
             self._frame_c = torch.compile(self._frame, fullgraph=True, dynamic=False)
             self._prefill_c = torch.compile(self._prefill_core, fullgraph=True, dynamic=False)
-            self._talker_fused_c = torch.compile(self._talker_fused, fullgraph=True, dynamic=False)
+            tmode = "max-autotune-no-cudagraphs" if autotune else None
+            self._talker_fused_c = torch.compile(self._talker_fused, fullgraph=True, dynamic=False, mode=tmode)
         else:
             self._frame_c, self._prefill_c = self._frame, self._prefill_core
             self._talker_fused_c = self._talker_fused
+        self.ftk = None
+        if fused_talker and dt == torch.bfloat16 and compile:
+            from uqt.fused_talker import FusedTalker
+            self.ftk = FusedTalker(self)
+            self._pre_fused_c = torch.compile(self._pre_fused, fullgraph=True, dynamic=False)
+            self._post_fused_c = torch.compile(self._post_fused, fullgraph=True, dynamic=False)
         self.sdec = None
         if streaming_codec:
             from uqt.streaming_codec import StreamingCodecDecoder
@@ -297,7 +305,10 @@ class Engine:
         return idx.gather(-1, (p / e).argmax(-1, keepdim=True))
 
     def _talker_logits(self, h, ban_eos):
-        s = F.linear(h, self.head)[0].float()
+        return self._logits_sample(F.linear(h, self.head)[0], ban_eos)
+
+    def _logits_sample(self, logits, ban_eos):
+        s = logits.float()
         rp = self.s.repetition_penalty
         if rp != 1.0:
             s = torch.where(self.seen, torch.where(s < 0, s * rp, s / rp), s)
@@ -425,7 +436,31 @@ class Engine:
         self.inp.copy_(torch.stack(embs, 0).sum(0) + self.trail.index_select(0, self.step))
         self._frame_talker(Lb)
 
+    def _pre_fused(self):
+        c = self.fcodes[0]
+        embs = [F.embedding(c[:1], self.t_emb)] + [F.embedding(c[i:i + 1], self.cp_emb[i - 1])
+                                                    for i in range(1, self.n_groups)]
+        self.codes.index_copy_(0, self.fidx, self.fcodes)
+        self.inp.copy_(torch.stack(embs, 0).sum(0) + self.trail.index_select(0, self.step))
+
+    def _post_fused(self):
+        h = self.ftk.final_hidden()
+        nc = self._logits_sample(self.ftk.logits[0], self.fidx < (self.s.min_new_tokens - 1))
+        self.seen.index_fill_(0, nc, True)
+        self.hidden.copy_(h)
+        self.code0.copy_(nc)
+        self.pos.add_(1)
+        self.step.add_(1)
+        self.fidx.add_(1)
+
     def _run_frames(self, K, Lb, compiled=True):
+        if self.ftk is not None and self.fcp is not None and compiled:
+            for _ in range(K):
+                self._fcp_step()
+                self._pre_fused_c()
+                self.ftk.step(self.inp, Lb)
+                self._post_fused_c()
+            return
         if self.fcp is not None and compiled:
             for _ in range(K):
                 self._fcp_step()

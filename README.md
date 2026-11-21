@@ -77,5 +77,48 @@ Per-frame breakdown (CustomVoice, graphed): fused code predictor 1.83 ms (15 dep
 Talker step 2.06 ms. "Voiced" TTFA waits for the first chunk containing audio above -40 dBFS; the
 Base model emits ~80-300 ms of leading silence on this voice, as the official implementation does.
 
-Open question: CustomVoice WER is 1.5-2.0% across three engine runs against 1.35% for the official
-implementation on 60 utterances; a larger multi-seed set is needed before claiming parity or a gap.
+## Phase 2: latency and accuracy parity
+
+Changes on top of Phase 1:
+
+- `uqt/prompt.py`: native prompt construction with per-voice / per-speaker caching; bit-identical
+  to the official builder in bf16 (12/12 prompts), 0.24 ms instead of 2.0-2.4 ms.
+- `uqt/streaming_codec.py`: stateful, frame-exact streaming codec decoder (ported from vLLM-Omni,
+  Apache-2.0). Matches the official full-utterance decode at 30-36 dB SNR (bf16 rounding) where the
+  Phase 1 25-frame-window decode reached only 11-22 dB; 0.54-0.65 ms per chunk instead of
+  4.4-5.7 ms. The decoder state after a voice's reference codes is cached per voice.
+- Talker step compiled with inductor `max-autotune` (1.71 ms instead of 2.06 ms per step).
+- `uqt/fused_talker.py` (opt-in, `fused_talker=True`): the Talker as a PDL kernel chain with a
+  split-key attention kernel. Numerically sound (logit cosine >= 0.99994, greedy argmax agreement
+  59/60 frames) but 1.94 ms per step, slower than the autotuned path; at batch 1 each of the ~170
+  kernels is latency-bound. Kept for future work (megakernel).
+
+### Accuracy: 300 LibriSpeech pairs x 2 seeds
+
+```powershell
+modal run bench/phase0.py::prep --n-pairs 300
+modal run bench/eval_large.py --n 300 --seeds 1,2
+```
+
+| Variant | System | WER seed 1 | WER seed 2 | SIM seed 1 | SIM seed 2 |
+|---|---|---|---|---|---|
+| Base | official qwen-tts | 1.26% | 1.04% | 0.956 | 0.955 |
+| Base | uqt (Phase 2) | 1.06% | 1.06% | 0.954 | 0.956 |
+| CustomVoice | official qwen-tts | 5.85% | 1.86% | - | - |
+| CustomVoice | uqt (Phase 2) | 2.53% | 1.80% | - | - |
+
+Paired bootstrap over utterances (both seeds pooled), uqt minus official corpus WER:
+Base -0.09 points (95% CI -0.23 to +0.04); CustomVoice -1.69 points (95% CI -6.0 to +0.7).
+CustomVoice WER is dominated by rare runaway generations in both systems (one official utterance
+produced 210 extra words in seed 1).
+
+### Latency (H100, bf16, batch 1, `modal run bench/phase1.py::bench_all --n 60`)
+
+| Variant | Gen ms / frame | TTFA (first chunk) | TTFA (voiced) | RTF (streaming) |
+|---|---|---|---|---|
+| Base | 3.47 | 7.3 ms | 24.9 ms | 0.046 |
+| CustomVoice | 3.48 | 7.6 ms | 10.9 ms | 0.046 |
+
+TTFA uses chunk schedule 1, 2, 4, 8 (first chunk) or 2, 4, 8 (voiced numbers, which are lowest with
+that schedule). Prompt build 0.6 ms, prefill 2.1 ms, first frame 3.5 ms, first decode 0.6 ms.
+Startup (compile, autotune, graph capture) currently takes about 9 minutes per process.
