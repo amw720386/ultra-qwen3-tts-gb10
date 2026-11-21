@@ -124,7 +124,7 @@ class Engine:
 
     def __init__(self, tts, max_len: int = 2048, sampling: SamplingCfg | None = None,
                  compile: bool = True, graph_decoder: bool = True, triton_sampler: bool = True,
-                 fused_cp: bool = True):
+                 fused_cp: bool = True, streaming_codec: bool = True):
         self.tts = tts
         m = tts.model
         m.requires_grad_(False)
@@ -206,6 +206,14 @@ class Engine:
         else:
             self._frame_c, self._prefill_c = self._frame, self._prefill_core
             self._talker_fused_c = self._talker_fused
+        self.sdec = None
+        if streaming_codec:
+            from uqt.streaming_codec import StreamingCodecDecoder
+            self.sdec = StreamingCodecDecoder(self.m.speech_tokenizer.model.decoder, num_slots=1)
+            self.sdec_graphs: dict = {}
+            self.sdec_pool = None
+            self.voice_dec_state: dict = {}
+            self.slot_t = torch.zeros(1, dtype=torch.int32, device=dev)
         self.fcp = None
         if fused_cp and dt == torch.bfloat16:
             from uqt.fused_cp import FusedCodePredictor
@@ -493,6 +501,11 @@ class Engine:
                 self._capture(("frames", K, Lb), lambda K=K, Lb=Lb: self._run_frames(K, Lb))
         for n in dec_windows:
             self._dec(torch.zeros(n, self.n_groups, dtype=torch.long, device=self.dev))
+        if self.sdec is not None:
+            with torch.cuda.stream(self.dec_stream):
+                for k in range(1, 9):
+                    self._sdec_call(torch.zeros(k, self.n_groups, dtype=torch.long, device=self.dev), 0)
+            torch.cuda.synchronize()
         torch.cuda.synchronize()
 
     # ------------------------------------------------------------------ generation
@@ -555,6 +568,45 @@ class Engine:
         g.replay()
         return out.reshape(-1)
 
+    # ---- stateful streaming codec (vLLM-Omni port): frame-exact, no left-context recompute
+
+    def _sdec_call(self, codes_k: torch.Tensor, pos: int) -> torch.Tensor:
+        """Decode k new frames [k, 16] of slot 0 starting at stream position `pos` -> [k * 1920] fp32."""
+        from uqt.streaming_codec import StreamingDecodeGraphs
+
+        k = codes_k.shape[0]
+        g = self.sdec_graphs.get(k)
+        if g is None:
+            g = StreamingDecodeGraphs(self.sdec, [1], frames=k, pool=self.sdec_pool)
+            self.sdec_pool = g.pool
+            self.sdec_graphs[k] = g
+        pos_t = torch.full((1,), pos, dtype=torch.int32, device=self.dev)
+        return g(codes_k[None].contiguous(), self.slot_t, pos_t)[0]
+
+    def _sdec_prime(self, ref: torch.Tensor | None) -> int:
+        """Run the reference codes through the decoder state (cached per reference tensor)."""
+        if ref is None or ref.shape[0] == 0:
+            return 0
+        R = int(ref.shape[0])
+        ent = self.voice_dec_state.get(id(ref))
+        state = self.sdec._slot_state(0)
+        if ent is not None and ent[0] is ref:
+            for t, v in zip(state, ent[1]):
+                t.copy_(v)
+            return R
+        codes = ref.to(torch.int32)[None]
+        first = min(R, self.sdec.RING)
+        self.sdec(codes[:, :first].contiguous(), self.slot_t, torch.zeros(1, dtype=torch.int32, device=self.dev),
+                  initial=True)
+        p = first
+        while p < R:
+            q = min(R, p + self.sdec.max_frames)
+            self.sdec(codes[:, p:q].contiguous(), self.slot_t,
+                      torch.full((1,), p, dtype=torch.int32, device=self.dev))
+            p = q
+        self.voice_dec_state[id(ref)] = (ref, [t.clone() for t in state])
+        return R
+
     @torch.inference_mode()
     def decode_window(self, codes_all: torch.Tensor, s: int, e: int, left: int = 25) -> torch.Tensor:
         """Decode frames [s, e) of codes_all ([N, 16], context included) with `left` frames of context."""
@@ -579,6 +631,11 @@ class Engine:
             self.full[:R].copy_(ctx)
         gen_s = torch.cuda.current_stream()
         dec_s = self.dec_stream if overlap else gen_s
+        base = 0
+        if self.sdec is not None:
+            dec_s.wait_stream(gen_s)
+            with torch.cuda.stream(dec_s):
+                base = self._sdec_prime(ctx)  # overlaps with the first frames on the generation stream
         n, i = 0, 0
         c = self.step_frames(schedule[0], use_graph)
         while True:
@@ -595,8 +652,11 @@ class Engine:
             if k > 0:
                 # chunk i is complete (host synced above), so the decode stream needs no wait.
                 with torch.cuda.stream(dec_s):
-                    self.full[R + n:R + n + k].copy_(c[:k])
-                    wav = self.decode_window(self.full, R + n, R + n + k, left).float().cpu().numpy()
+                    if self.sdec is not None:
+                        wav = self._sdec_call(c[:k], base + n).cpu().numpy()
+                    else:
+                        self.full[R + n:R + n + k].copy_(c[:k])
+                        wav = self.decode_window(self.full, R + n, R + n + k, left).float().cpu().numpy()
                 n += k
                 yield wav
             if nxt is None:

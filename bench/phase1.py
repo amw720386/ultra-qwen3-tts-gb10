@@ -456,3 +456,89 @@ def prompt_test():
                 torch.cuda.empty_cache()
     print(json.dumps(out, indent=1))
     return out
+
+
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=1800)
+def codec_test():
+    """Streaming (stateful) and windowed decoders vs the official full-utterance decode."""
+    import numpy as np
+    import torch
+    from uqt.common import TIMING_TEXTS
+    from uqt.engine import Engine
+
+    man = json.load(open("/data/manifest.json"))
+    out = {}
+
+    def snr(ref, x):
+        n = min(len(ref), len(x))
+        ref, x = ref[:n], x[:n]
+        return float(10 * np.log10((ref ** 2).sum() / max(((ref - x) ** 2).sum(), 1e-20))), float(np.abs(ref - x).max())
+
+    with torch.inference_mode():
+        for variant in ("Base", "CustomVoice"):
+            tts = _load(variant, "bf16")
+            eng = Engine(tts, max_len=2048)
+            kind = "clone" if variant == "Base" else "custom"
+            res = []
+            for i in range(3):
+                it = man[i]
+                call = (dict(text=TIMING_TEXTS[3 + i % 2], language="English",
+                             voice_clone_prompt=tts.create_voice_clone_prompt(ref_audio=it["prompt_wav"], ref_text=it["prompt_text"]))
+                        if kind == "clone" else dict(text=TIMING_TEXTS[2 + i], language="English", speaker="Ryan"))
+                p = eng.build_prompt(kind, **call)
+                gen = eng.generate_codes(p, max_frames=400)
+                ref = p.ref_codes if p.ref_codes is not None else gen[:0]
+                R = ref.shape[0]
+                allc = torch.cat([ref, gen], 0)
+                off = tts.model.speech_tokenizer.decode([{"audio_codes": allc}])[0][0]
+                off = np.asarray(off.float().cpu() if hasattr(off, "float") else off, np.float32)[R * 1920:]
+                # streaming codec, chunk ramp 1,2,4,8...
+                eng.voice_dec_state.clear()
+                base = eng._sdec_prime(ref if R else None)
+                sched, pos, chunks = [1, 2, 4, 8], 0, []
+                j = 0
+                while pos < gen.shape[0]:
+                    k = min(sched[min(j, 3)], gen.shape[0] - pos)
+                    chunks.append(eng._sdec_call(gen[pos:pos + k], base + pos).cpu().numpy().copy())
+                    pos += k; j += 1
+                st = np.concatenate(chunks)
+                # windowed decode (phase-1 path), left 25
+                full = torch.cat([ref, gen], 0)
+                pos, j, wch = 0, 0, []
+                while pos < gen.shape[0]:
+                    k = min(sched[min(j, 3)], gen.shape[0] - pos)
+                    wch.append(eng.decode_window(full, R + pos, R + pos + k, 25).float().cpu().numpy())
+                    pos += k; j += 1
+                wd = np.concatenate(wch)
+                res.append({"frames": int(gen.shape[0]), "R": int(R),
+                            "streaming_snr_db_maxabs": snr(off, st), "windowed_snr_db_maxabs": snr(off, wd),
+                            "len_off": len(off), "len_stream": len(st)})
+            # timing per chunk size
+            tim = {}
+            codes = eng.generate_codes(p, max_frames=64)
+            for k in (1, 2, 4, 8):
+                with torch.cuda.stream(eng.dec_stream):
+                    eng._sdec_call(codes[:k], 8)
+                    torch.cuda.synchronize(); t = time.perf_counter()
+                    for _ in range(50):
+                        eng._sdec_call(codes[:k], 8)
+                    torch.cuda.synchronize(); tim[f"stream_k{k}_ms"] = (time.perf_counter() - t) * 20
+                eng.decode_window(codes, 33, 33 + k, 25)
+                torch.cuda.synchronize(); t = time.perf_counter()
+                for _ in range(50):
+                    eng.decode_window(codes, 33, 33 + k, 25)
+                torch.cuda.synchronize(); tim[f"window_k{k}_ms"] = (time.perf_counter() - t) * 20
+            eng.voice_dec_state.clear()
+            torch.cuda.synchronize(); t = time.perf_counter()
+            if kind == "clone":
+                eng._sdec_prime(p.ref_codes)
+            torch.cuda.synchronize(); tim["prime_cold_ms"] = (time.perf_counter() - t) * 1000
+            t = time.perf_counter()
+            if kind == "clone":
+                eng._sdec_prime(p.ref_codes)
+            torch.cuda.synchronize(); tim["prime_cached_ms"] = (time.perf_counter() - t) * 1000
+            out[variant] = {"cases": res, **tim}
+            del eng, tts
+            torch.cuda.empty_cache()
+    print(json.dumps(out, indent=1))
+    return out
