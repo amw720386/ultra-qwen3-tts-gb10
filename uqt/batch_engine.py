@@ -65,6 +65,7 @@ class BatchEngine:
         self.voice_state: dict = {}
         self.dec_graphs: dict = {}
         self._dec_pool = None
+        self.dec_stream = torch.cuda.Stream()
 
     # ------------------------------------------------------------------ batched step
 
@@ -184,7 +185,10 @@ class BatchEngine:
         self.fidx[slot] = 0
         self.seen[slot].copy_(E.seen)
         self.trail[slot].copy_(E.trail[:self.L])
-        R = self._prime(slot, prompt.ref_codes)
+        # the decoder slot may still be in use by the previous occupant's last decode on the decode stream
+        self.dec_stream.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(self.dec_stream):
+            R = self._prime(slot, prompt.ref_codes)
         self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta)
 
     def release(self, slot: int):
@@ -219,9 +223,13 @@ class BatchEngine:
 
     def generate(self, K: int):
         """Advance all active slots by K frames. Returns (slots, codes [n, K, 16] GPU, valid frames per row)."""
+        return self.collect(self.launch(K))
+
+    def launch(self, K: int):
+        """Replay the batched step for all active slots without waiting; returns a handle for collect()."""
         act = self.active()
         if not act:
-            return [], None, []
+            return None
         B = _pow2_at_least(max(act) + 1)
         need = max(self.info[s]["pos"] for s in act) + K + 1
         Lb = next((b for b in self.LB if b >= need and b <= self.L), self.L)
@@ -230,14 +238,25 @@ class BatchEngine:
         starts = torch.tensor([self.info[s]["frames"] for s in act], device=self.dev)
         idx = (starts[:, None] + torch.arange(K, device=self.dev)[None, :]).clamp(max=self.L - 1)
         chunk = self.codes[rows[:, None], idx]
-        c0 = chunk[:, :, 0].tolist()  # host sync
+        c0 = chunk[:, :, 0].to("cpu", non_blocking=True)
+        ev = torch.cuda.Event()
+        ev.record()
+        for s in act:  # host bookkeeping for the frames now in flight
+            self.info[s]["pos"] += K
+        return (act, chunk, c0, ev, K)
+
+    def collect(self, h):
+        if h is None:
+            return [], None, []
+        act, chunk, c0, ev, K = h
+        ev.synchronize()
+        c0 = c0.tolist()
         valid = []
         for s, row in zip(act, c0):
             it = self.info[s]
             k = row.index(self.e.eos) if self.e.eos in row else K
             k = min(k, it["max_frames"] - it["frames"])
             it["frames"] += K
-            it["pos"] += K
             if k < K or it["frames"] >= it["max_frames"]:
                 it["done"] = True
             valid.append(k)
@@ -254,9 +273,11 @@ class BatchEngine:
             g = StreamingDecodeGraphs(self.sdec, sizes, frames=K, pool=self._dec_pool)
             self._dec_pool = g.pool
             self.dec_graphs[K] = g
-        sl = torch.tensor(slots, dtype=torch.int32, device=self.dev)
-        pos = torch.tensor([self.info[s]["dec_pos"] for s in slots], dtype=torch.int32, device=self.dev)
-        wav = g(chunk.contiguous(), sl, pos).cpu().numpy()
+        with torch.cuda.stream(self.dec_stream):
+            chunk.record_stream(self.dec_stream)
+            sl = torch.tensor(slots, dtype=torch.int32, device=self.dev)
+            pos = torch.tensor([self.info[s]["dec_pos"] for s in slots], dtype=torch.int32, device=self.dev)
+            wav = g(chunk.contiguous(), sl, pos).cpu().numpy()
         out = []
         up = self.sdec.spf
         for i, s in enumerate(slots):

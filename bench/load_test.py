@@ -32,7 +32,8 @@ def _pct(v, q):
 
 @app.function(image=img, gpu="H100!", volumes=VOLS, timeout=7200)
 def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_client: int = 3, K: int = 2,
-         max_slots: int = 64, max_len: int = 1024, admit_per_iter: int = 4, save_wavs: int = 0):
+         max_slots: int = 64, max_len: int = 1024, admit_per_iter: int = 4, save_wavs: int = 0,
+         think_s: float = 0.5, overlap: bool = True):
     import numpy as np
     import soundfile as sf
     import torch
@@ -106,11 +107,12 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                 be.info[s] = None
             rng = np.random.default_rng(C)
             order = rng.permutation(len(texts))
-            stagger = 6.0 / max(C, 1)
+            stagger = 7.5 / max(C, 1)  # spread first requests over ~one reply length
             pending = [(i * stagger, i, 0) for i in range(C)]  # (arrival, client, nth request)
             recs, nxt_text = [], 0
             t0 = time.perf_counter()
             iters, iter_ms = 0, []
+            handle = None
             while pending or be.active():
                 now = time.perf_counter() - t0
                 pending.sort()
@@ -125,12 +127,19 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                     be.admit(slot, prompt_for(ti, texts[ti]), max_frames=400, meta=rec)
                     rec["admitted"] = time.perf_counter() - t0
                     admitted += 1
-                if not be.active():
+                if not be.active() and handle is None:
                     if pending:
                         time.sleep(max(0.0, min(0.002, pending[0][0] - (time.perf_counter() - t0))))
                     continue
                 ts = time.perf_counter()
-                slots, chunk, valid = be.generate(K)
+                if overlap:
+                    # collect step i, launch step i+1 (async), then decode step i on the decode stream
+                    slots, chunk, valid = be.collect(handle) if handle is not None else be.generate(K)
+                    handle = be.launch(K) if be.active() else None
+                else:
+                    slots, chunk, valid = be.generate(K)
+                if not slots:
+                    continue
                 wavs = be.decode(slots, chunk, valid)
                 tn = time.perf_counter() - t0
                 iter_ms.append((time.perf_counter() - ts) * 1000)
@@ -147,7 +156,10 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                         recs.append(rec)
                         be.release(s)
                         if rec["nth"] + 1 < reqs_per_client:
-                            pending.append((tn, rec["client"], rec["nth"] + 1))
+                            # conversational client: listens to the whole reply in real time, pauses, asks again
+                            dur = sum(n for _, n in rec["chunks"]) / 24000
+                            t_first = rec["chunks"][0][0] if rec["chunks"] else tn
+                            pending.append((max(tn, t_first + dur + think_s), rec["client"], rec["nth"] + 1))
             wall = time.perf_counter() - t0
             ttfa, rtf, late, under = [], [], [], 0
             tot_audio = 0.0
@@ -165,7 +177,9 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                     acc += n / 24000
                 late.append(worst)
                 under += worst > 0.0
-            res = {"C": C, "requests": len(recs), "wall_s": wall, "audio_s": tot_audio,
+            # streams generating at once (time-averaged)
+            busy = sum(r["done"] - r["admitted"] for r in recs if "done" in r) / max(wall, 1e-9)
+            res = {"C": C, "requests": len(recs), "avg_generating_streams": busy, "wall_s": wall, "audio_s": tot_audio,
                    "throughput_audio_s_per_s": tot_audio / wall,
                    "ttfa_ms_p50": 1000 * _pct(ttfa, 50), "ttfa_ms_p90": 1000 * _pct(ttfa, 90), "ttfa_ms_p99": 1000 * _pct(ttfa, 99),
                    "rtf_p50": _pct(rtf, 50), "rtf_p90": _pct(rtf, 90),
@@ -185,9 +199,9 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
 
 @app.local_entrypoint()
 def main(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_client: int = 3, frames: int = 2,
-         max_slots: int = 64, max_len: int = 1024, tag: str = ""):
+         max_slots: int = 64, max_len: int = 1024, tag: str = "", think_s: float = 0.5, admit_per_iter: int = 8):
     K = frames
-    r = load.remote(variant, concs, reqs_per_client, K, max_slots, max_len)
+    r = load.remote(variant, concs, reqs_per_client, K, max_slots, max_len, admit_per_iter=admit_per_iter, think_s=think_s)
     os.makedirs("results/phase3", exist_ok=True)
     name = f"results/phase3/load-{variant}-K{K}-S{max_slots}{('-' + tag) if tag else ''}.json"
     json.dump(r, open(name, "w"), indent=1)
