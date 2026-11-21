@@ -18,11 +18,14 @@ from uqt import kernels
 from uqt.engine import _rms, _rot_half
 
 
-def _pow2_at_least(n, lo=1):
-    b = lo
-    while b < n:
-        b *= 2
-    return b
+B_BUCKETS = (1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512)
+
+
+def _bucket_b(n, cap):
+    for b in B_BUCKETS:
+        if b >= n and b <= cap:
+            return b
+    return cap
 
 
 class BatchEngine:
@@ -191,6 +194,118 @@ class BatchEngine:
             R = self._prime(slot, prompt.ref_codes)
         self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta)
 
+    # ---- packed batched prefill: several prompts in one forward (positions restart per prompt,
+    #      block-diagonal causal mask), then each prompt's K/V is copied into its slot.
+
+    PACK_BUCKETS = (128, 256, 384, 512, 768, 1024, 1536, 2048)
+    PACK_MAX = 16
+
+    def _init_pack(self):
+        E = self.e
+        n, Tm = self.PACK_MAX, self.PACK_BUCKETS[-1]
+        self.pk_emb = torch.zeros(Tm, self.D, device=self.dev, dtype=self.dt)
+        self.pk_pos = torch.zeros(Tm, dtype=torch.long, device=self.dev)
+        self.pk_seg = torch.full((Tm,), -1, dtype=torch.long, device=self.dev)
+        self.pk_last = torch.zeros(n, dtype=torch.long, device=self.dev)
+        self.pk_code0 = torch.zeros(n, dtype=torch.long, device=self.dev)
+        self.pk_hidden = torch.zeros(n, self.D, device=self.dev, dtype=self.dt)
+        self.pk_u = torch.empty(n, self.V, device=self.dev, dtype=torch.float32)
+        self.pk_ar = torch.arange(Tm, device=self.dev)
+        self._pack_c = torch.compile(self._pack_core, fullgraph=True, dynamic=False)
+        self.pk_graphs: dict = {}
+
+    def _pack_core(self, Tb: int):
+        E, Tk, s = self.e, self.e.talker, self.e.s
+        pos, seg = self.pk_pos[:Tb], self.pk_seg[:Tb]
+        ar = self.pk_ar[:Tb]
+        ok = (seg[:, None] == seg[None, :]) & (ar[None, :] <= ar[:, None])
+        ok = ok | (ar[:, None] == ar[None, :])  # padding rows attend to themselves (no empty softmax)
+        mask = torch.zeros(Tb, Tb, device=self.dev, dtype=self.dt).masked_fill(~ok, float("-inf"))
+        h = Tk.forward(self.pk_emb[:Tb], E.t_cos[pos], E.t_sin[pos], E.kc, E.vc,
+                       E._write_static(E.kc, E.vc, 0), Tb, mask)
+        hl = h.index_select(0, self.pk_last)
+        lg = F.linear(hl, E.head).float()
+        lg = lg.masked_fill(E.suppress[None, :], float("-inf"))
+        if s.min_new_tokens > 0:
+            lg = lg.masked_fill(E.eos_mask[None, :], float("-inf"))
+        if s.greedy:
+            nc = lg.argmax(-1)
+        else:
+            nc = kernels.topk_sample_rows(lg.contiguous(), self.pk_u.uniform_(), 1.0 / s.temperature, s.top_k)
+        self.pk_code0.copy_(nc)
+        self.pk_hidden.copy_(hl)
+
+    def warm_pack(self):
+        """Compile and capture the packed-prefill graph for every bucket (a lazy compile costs ~30 s)."""
+        if not hasattr(self, "pk_emb"):
+            self._init_pack()
+        for Tb in self.PACK_BUCKETS:
+            if Tb not in self.pk_graphs:
+                self.pk_pos[:Tb].copy_(self.pk_ar[:Tb])
+                self.pk_seg[:Tb].zero_()
+                self.pk_last.fill_(Tb - 1)
+                self.pk_graphs[Tb] = self.e._capture(("pack", Tb), lambda Tb=Tb: self._pack_c(Tb))
+        torch.cuda.synchronize()
+
+    def admit_many(self, reqs):
+        """reqs: list of (slot, prompt, max_frames, meta). One packed prefill for all of them."""
+        if not reqs:
+            return
+        if not hasattr(self, "pk_emb"):
+            self._init_pack()
+        out = []
+        i = 0
+        while i < len(reqs):  # split into packs that fit the largest bucket / PACK_MAX prompts
+            group, tot = [], 0
+            while i < len(reqs) and len(group) < self.PACK_MAX and tot + reqs[i][1].embeds.shape[0] <= self.PACK_BUCKETS[-1]:
+                group.append(reqs[i]); tot += reqs[i][1].embeds.shape[0]; i += 1
+            if not group:
+                raise ValueError("prompt longer than the largest pack bucket")
+            self._admit_pack(group, tot)
+
+    def _admit_pack(self, group, tot):
+        E = self.e
+        Tb = next(b for b in self.PACK_BUCKETS if b >= tot)
+        offs, off = [], 0
+        for j, (_, p, _, _) in enumerate(group):
+            T = p.embeds.shape[0]
+            self.pk_emb[off:off + T].copy_(p.embeds)
+            offs.append(off)
+            off += T
+        lens = [p.embeds.shape[0] for _, p, _, _ in group]
+        pos_h = torch.cat([torch.arange(T) for T in lens] + [torch.zeros(Tb - tot, dtype=torch.long)])
+        seg_h = torch.cat([torch.full((T,), j) for j, T in enumerate(lens)] + [torch.full((Tb - tot,), -1)])
+        last_h = torch.tensor([o + T - 1 for o, T in zip(offs, lens)] + [0] * (self.PACK_MAX - len(group)))
+        self.pk_pos[:Tb].copy_(pos_h.to(self.dev, non_blocking=True))
+        self.pk_seg[:Tb].copy_(seg_h.to(self.dev, non_blocking=True))
+        self.pk_last.copy_(last_h.to(self.dev, non_blocking=True))
+        self.pk_emb[tot:Tb].zero_()
+        g = self.pk_graphs.get(Tb)
+        if g is None:
+            g = E._capture(("pack", Tb), lambda: self._pack_c(Tb))
+            self.pk_graphs[Tb] = g
+        g.replay()
+        for j, (slot, p, max_frames, meta) in enumerate(group):
+            T, o = lens[j], offs[j]
+            if T + max_frames + 8 >= self.L:
+                max_frames = self.L - T - 9
+            self.kc[:, slot, :, :T].copy_(E.kc[:, :, o:o + T])
+            self.vc[:, slot, :, :T].copy_(E.vc[:, :, o:o + T])
+            self.code0[slot:slot + 1].copy_(self.pk_code0[j:j + 1])
+            self.hidden[slot:slot + 1].copy_(self.pk_hidden[j:j + 1])
+            self.pos[slot] = T
+            self.step[slot] = 0
+            self.fidx[slot] = 0
+            self.seen[slot].zero_()
+            self.seen[slot].index_fill_(0, self.pk_code0[j:j + 1], True)
+            Tt = p.trailing.shape[0]
+            self.trail[slot].copy_(p.pad.expand(self.L, -1))
+            self.trail[slot, :Tt].copy_(p.trailing)
+            self.dec_stream.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(self.dec_stream):
+                R = self._prime(slot, p.ref_codes)
+            self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta)
+
     def release(self, slot: int):
         self.info[slot] = None
 
@@ -230,7 +345,7 @@ class BatchEngine:
         act = self.active()
         if not act:
             return None
-        B = _pow2_at_least(max(act) + 1)
+        B = _bucket_b(max(act) + 1, self.S)
         need = max(self.info[s]["pos"] for s in act) + K + 1
         Lb = next((b for b in self.LB if b >= need and b <= self.L), self.L)
         self._graph(K, B, Lb).replay()
@@ -269,7 +384,7 @@ class BatchEngine:
         n, K, _ = chunk.shape
         g = self.dec_graphs.get(K)
         if g is None:
-            sizes = [b for b in (1, 2, 4, 8, 16, 32, 64, 128, 256) if b <= self.S]
+            sizes = [b for b in B_BUCKETS if b <= self.S]
             g = StreamingDecodeGraphs(self.sdec, sizes, frames=K, pool=self._dec_pool)
             self._dec_pool = g.pool
             self.dec_graphs[K] = g
@@ -286,13 +401,14 @@ class BatchEngine:
         return out
 
     def warmup(self, Ks=(1, 2), Bs=None, Lbs=None):
-        Bs = Bs or [b for b in (1, 2, 4, 8, 16, 32, 64, 128, 256) if b <= self.S]
+        Bs = Bs or [b for b in B_BUCKETS if b <= self.S]
         Lbs = Lbs or [b for b in self.LB if b <= self.L]
         t = time.perf_counter()
         for K in Ks:
             for B in Bs:
                 for Lb in Lbs:
                     self._graph(K, B, Lb)
+        self.warm_pack()
         for K in Ks:
             self.info[0] = dict(dec_pos=0)
             self.decode([0], torch.zeros(1, K, 16, dtype=torch.long, device=self.dev), [0])

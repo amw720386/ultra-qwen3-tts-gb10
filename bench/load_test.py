@@ -33,7 +33,7 @@ def _pct(v, q):
 @app.function(image=img, gpu="H100!", volumes=VOLS, timeout=7200)
 def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_client: int = 3, K: int = 2,
          max_slots: int = 64, max_len: int = 1024, admit_per_iter: int = 4, save_wavs: int = 0,
-         think_s: float = 0.5, overlap: bool = True):
+         think_s: float = 0.5, overlap: bool = True, packed: bool = True):
     import numpy as np
     import soundfile as sf
     import torch
@@ -71,11 +71,32 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
             if variant == "Base" and i < len(voices):
                 be._prime(0, p.ref_codes)
         out["warmup_s"] = be.warmup(Ks=(K,)) + (time.perf_counter() - t)
+        # packed prefill: warm every pack bucket, and check it against single-prompt prefill (greedy)
+        greedy0 = eng.s.greedy
+        eng.s.greedy = True
+        ps = [prompt_for(i, texts[i]) for i in range(8)]
+        be.admit_many([(i, ps[i], 50, None) for i in range(8)])
+        pk_c0, pk_h = be.code0[:8].clone(), be.hidden[:8].float().clone()
+        agree, cosv = 0, []
+        for i in range(8):
+            eng.prefill(ps[i])
+            agree += int(int(eng.code0) == int(pk_c0[i]))
+            cosv.append(float(torch.nn.functional.cosine_similarity(eng.hidden.float()[0], pk_h[i], 0)))
+        out["pack_check"] = {"code0_agree": agree / 8, "hidden_cos_min": min(cosv)}
+        print("pack_check", out["pack_check"])
+        eng.s.greedy = greedy0
+        for s_ in range(max_slots):
+            be.info[s_] = None
+        for Tb in be.PACK_BUCKETS:
+            n = max(1, min(be.PACK_MAX, Tb // max(1, ps[0].embeds.shape[0])))
+            be.admit_many([(i, ps[i % 8], 50, None) for i in range(n)])
+            for s_ in range(max_slots):
+                be.info[s_] = None
 
         # ---- step-time scan: B identical streams, generation and decode separately
         scan = {}
         p0 = prompt_for(0, texts[0])
-        for B in [b for b in (1, 2, 4, 8, 16, 32, 64, 128) if b <= max_slots]:
+        for B in [b for b in (1, 8, 32, 64, 128, 256, 512) if b <= max_slots]:
             for s in range(max_slots):
                 be.info[s] = None
             for s in range(B):
@@ -107,7 +128,8 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                 be.info[s] = None
             rng = np.random.default_rng(C)
             order = rng.permutation(len(texts))
-            stagger = 7.5 / max(C, 1)  # spread first requests over ~one reply length
+            # conversational: spread first requests over ~one reply; back-to-back: near-simultaneous start
+            stagger = (7.5 if think_s >= 0 else 0.5) / max(C, 1)
             pending = [(i * stagger, i, 0) for i in range(C)]  # (arrival, client, nth request)
             recs, nxt_text = [], 0
             t0 = time.perf_counter()
@@ -116,21 +138,32 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
             while pending or be.active():
                 now = time.perf_counter() - t0
                 pending.sort()
-                admitted = 0
-                while pending and pending[0][0] <= now and admitted < admit_per_iter:
-                    slot = be.free_slot()
+                batch, taken = [], set()
+                while pending and pending[0][0] <= now and len(batch) < admit_per_iter:
+                    slot = next((i for i, it in enumerate(be.info) if it is None and i not in taken), None)
                     if slot is None:
                         break
+                    taken.add(slot)
                     arr, client, nth = pending.pop(0)
                     ti = int(order[nxt_text % len(order)]); nxt_text += 1
                     rec = {"client": client, "nth": nth, "arrival": arr, "text_idx": ti, "chunks": []}
-                    be.admit(slot, prompt_for(ti, texts[ti]), max_frames=400, meta=rec)
-                    rec["admitted"] = time.perf_counter() - t0
-                    admitted += 1
+                    batch.append((slot, prompt_for(ti, texts[ti]), 400, rec))
+                t_adm = time.perf_counter()
+                n_graphs0 = (len(be.graphs), len(eng.graphs), len(be.dec_graphs), len(getattr(be, "pk_graphs", {})))
+                if batch:
+                    if packed:
+                        be.admit_many(batch)
+                    else:
+                        for b in batch:
+                            be.admit(*b)
+                    ta = time.perf_counter() - t0
+                    for b in batch:
+                        b[3]["admitted"] = ta
                 if not be.active() and handle is None:
                     if pending:
                         time.sleep(max(0.0, min(0.002, pending[0][0] - (time.perf_counter() - t0))))
                     continue
+                adm_s = time.perf_counter() - t_adm
                 ts = time.perf_counter()
                 if overlap:
                     # collect step i, launch step i+1 (async), then decode step i on the decode stream
@@ -143,6 +176,14 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                 wavs = be.decode(slots, chunk, valid)
                 tn = time.perf_counter() - t0
                 iter_ms.append((time.perf_counter() - ts) * 1000)
+                step_s = time.perf_counter() - ts
+                if adm_s + step_s > 1.0:
+                    n_graphs1 = (len(be.graphs), len(eng.graphs), len(be.dec_graphs), len(getattr(be, "pk_graphs", {})))
+                    act = be.active()
+                    print("SLOW", json.dumps({"t": round(tn, 2), "admit_s": round(adm_s, 3), "step_s": round(step_s, 3),
+                                              "n_admit": len(batch), "active": len(act), "max_slot": max(act) if act else -1,
+                                              "graphs_before": n_graphs0, "graphs_after": n_graphs1,
+                                              "dynamo_frames": len(torch._dynamo.utils.counters.get("frames", {}))}), flush=True)
                 iters += 1
                 for s, w in zip(slots, wavs):
                     it = be.info[s]
@@ -155,7 +196,9 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
                         rec["done"] = tn
                         recs.append(rec)
                         be.release(s)
-                        if rec["nth"] + 1 < reqs_per_client:
+                        if rec["nth"] + 1 < reqs_per_client and think_s < 0:  # back-to-back client
+                            pending.append((tn, rec["client"], rec["nth"] + 1))
+                        elif rec["nth"] + 1 < reqs_per_client:
                             # conversational client: listens to the whole reply in real time, pauses, asks again
                             dur = sum(n for _, n in rec["chunks"]) / 24000
                             t_first = rec["chunks"][0][0] if rec["chunks"] else tn
@@ -199,9 +242,11 @@ def load(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
 
 @app.local_entrypoint()
 def main(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_client: int = 3, frames: int = 2,
-         max_slots: int = 64, max_len: int = 1024, tag: str = "", think_s: float = 0.5, admit_per_iter: int = 8):
+         max_slots: int = 64, max_len: int = 1024, tag: str = "", think_s: float = 0.5, admit_per_iter: int = 16,
+         overlap: bool = True, packed: bool = True, save_wavs: int = 0):
     K = frames
-    r = load.remote(variant, concs, reqs_per_client, K, max_slots, max_len, admit_per_iter=admit_per_iter, think_s=think_s)
+    r = load.remote(variant, concs, reqs_per_client, K, max_slots, max_len, admit_per_iter=admit_per_iter, think_s=think_s,
+                    overlap=overlap, packed=packed, save_wavs=save_wavs)
     os.makedirs("results/phase3", exist_ok=True)
     name = f"results/phase3/load-{variant}-K{K}-S{max_slots}{('-' + tag) if tag else ''}.json"
     json.dump(r, open(name, "w"), indent=1)

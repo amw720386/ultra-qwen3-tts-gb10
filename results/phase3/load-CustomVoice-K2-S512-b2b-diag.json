@@ -1,0 +1,74 @@
+{
+ "variant": "CustomVoice",
+ "K": 2,
+ "max_slots": 512,
+ "max_len": 512,
+ "warmup_s": 920.4981531840001,
+ "pack_check": {
+  "code0_agree": 1.0,
+  "hidden_cos_min": 0.9996239542961121
+ },
+ "scan": {
+  "1": {
+   "gen_ms_per_step": 7.822079500044765,
+   "dec_ms_per_step": 0.6886255000608799,
+   "ms_per_frame_all_streams": 4.2553525000528225,
+   "rt_capacity_streams": 18.79985265592144
+  },
+  "8": {
+   "gen_ms_per_step": 8.529570500002137,
+   "dec_ms_per_step": 0.9039610000058929,
+   "ms_per_frame_all_streams": 4.716765750004015,
+   "rt_capacity_streams": 135.6861955672603
+  },
+  "32": {
+   "gen_ms_per_step": 10.331780000001345,
+   "dec_ms_per_step": 1.774233999981334,
+   "ms_per_frame_all_streams": 6.053006999991339,
+   "rt_capacity_streams": 422.93028902885175
+  },
+  "64": {
+   "gen_ms_per_step": 11.756858000069315,
+   "dec_ms_per_step": 2.8622874999655323,
+   "ms_per_frame_all_streams": 7.3095727500174235,
+   "rt_capacity_streams": 700.4513362272502
+  },
+  "128": {
+   "gen_ms_per_step": 12.890241999969021,
+   "dec_ms_per_step": 5.287845499992727,
+   "ms_per_frame_all_streams": 9.089043749980874,
+   "rt_capacity_streams": 1126.631170635695
+  },
+  "256": {
+   "gen_ms_per_step": 16.648755000062465,
+   "dec_ms_per_step": 9.815408999997999,
+   "ms_per_frame_all_streams": 13.232082000030232,
+   "rt_capacity_streams": 1547.7534072078158
+  },
+  "512": {
+   "gen_ms_per_step": 25.138346999995065,
+   "dec_ms_per_step": 18.95018950000349,
+   "ms_per_frame_all_streams": 22.044268249999277,
+   "rt_capacity_streams": 1858.0793671843176
+  }
+ },
+ "closed_loop": {
+  "256": {
+   "C": 256,
+   "requests": 1024,
+   "avg_generating_streams": 127.46299517785863,
+   "wall_s": 42.57911160799995,
+   "audio_s": 7248.560000000005,
+   "throughput_audio_s_per_s": 170.2374644810136,
+   "ttfa_ms_p50": 72.08887750005033,
+   "ttfa_ms_p90": 33710.94500519992,
+   "ttfa_ms_p99": 33762.82064940997,
+   "rtf_p50": 0.22114210518037114,
+   "rtf_p90": 0.23440147079819845,
+   "underrun_frac": 0.0966796875,
+   "max_lateness_ms_p90": 0.0,
+   "iter_ms_p50": 26.589201500030413,
+   "iter_ms_p90": 29.297643000040807
+  }
+ }
+}

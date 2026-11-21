@@ -1,0 +1,74 @@
+{
+ "variant": "CustomVoice",
+ "K": 2,
+ "max_slots": 512,
+ "max_len": 512,
+ "warmup_s": 961.7173368179999,
+ "pack_check": {
+  "code0_agree": 1.0,
+  "hidden_cos_min": 0.9996230602264404
+ },
+ "scan": {
+  "1": {
+   "gen_ms_per_step": 8.293653999942308,
+   "dec_ms_per_step": 0.7540345000052184,
+   "ms_per_frame_all_streams": 4.523844249973763,
+   "rt_capacity_streams": 17.684074777875914
+  },
+  "8": {
+   "gen_ms_per_step": 9.09182149996468,
+   "dec_ms_per_step": 0.9660549999921386,
+   "ms_per_frame_all_streams": 5.02893824997841,
+   "rt_capacity_streams": 127.26344373044303
+  },
+  "32": {
+   "gen_ms_per_step": 10.78340450004589,
+   "dec_ms_per_step": 1.835682500029634,
+   "ms_per_frame_all_streams": 6.309543500037762,
+   "rt_capacity_streams": 405.7345828560622
+  },
+  "64": {
+   "gen_ms_per_step": 12.285625000004075,
+   "dec_ms_per_step": 2.934084999992592,
+   "ms_per_frame_all_streams": 7.609854999998333,
+   "rt_capacity_streams": 672.8117684241187
+  },
+  "128": {
+   "gen_ms_per_step": 13.666507000039019,
+   "dec_ms_per_step": 5.417494500022713,
+   "ms_per_frame_all_streams": 9.542000750030866,
+   "rt_capacity_streams": 1073.1501986066053
+  },
+  "256": {
+   "gen_ms_per_step": 17.225929500000348,
+   "dec_ms_per_step": 9.959970000011253,
+   "ms_per_frame_all_streams": 13.5929497500058,
+   "rt_capacity_streams": 1506.663408359268
+  },
+  "512": {
+   "gen_ms_per_step": 25.842379999971854,
+   "dec_ms_per_step": 19.159518500089234,
+   "ms_per_frame_all_streams": 22.500949250030544,
+   "rt_capacity_streams": 1820.367645153655
+  }
+ },
+ "closed_loop": {
+  "256": {
+   "C": 256,
+   "requests": 1024,
+   "avg_generating_streams": 186.37871311791102,
+   "wall_s": 8.884920883000063,
+   "audio_s": 7245.04,
+   "throughput_audio_s_per_s": 815.4310089426092,
+   "ttfa_ms_p50": 76.23565599999438,
+   "ttfa_ms_p90": 103.98477710008366,
+   "ttfa_ms_p99": 158.8870087600344,
+   "rtf_p50": 0.2260661536275247,
+   "rtf_p90": 0.23800367467329278,
+   "underrun_frac": 0.0,
+   "max_lateness_ms_p90": 0.0,
+   "iter_ms_p50": 27.295826500051135,
+   "iter_ms_p90": 30.505627399952573
+  }
+ }
+}
