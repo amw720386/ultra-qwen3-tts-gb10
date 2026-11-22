@@ -74,7 +74,7 @@ Single stream:
 | uqt, FP8 weights | **13.6** | **0.18** | **25 ms** |
 
 Accuracy (300 clips, Whisper large-v3 WER, excluding catastrophic failures): bf16 2.82%, FP8 1.70%.
-The difference is within seed noise: FP8 costs no accuracy.
+The difference is within seed noise: FP8 loses no accuracy.
 
 Batched throughput (audio seconds generated per second):
 
@@ -85,7 +85,7 @@ Batched throughput (audio seconds generated per second):
 
 With FP8, batched attention and the fused codec, all 256 concurrent streams run in real time.
 
-Codec decoder cost per stream-frame at 256 streams x 2 frames: **157 us -> 99 us** with the fused
+Codec decoder time per stream-frame at 256 streams x 2 frames: **157 us -> 99 us** with the fused
 kernels. Against an fp32 decode, the waveform is about 28 dB SNR for both the old and the fused
 paths (the fused path equal or slightly closer).
 
