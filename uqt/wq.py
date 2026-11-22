@@ -105,7 +105,7 @@ def _fp8_mm_kernel(a_ptr, w_ptr, s_ptr, c_ptr, M, N, K, stride_am, stride_cm, MB
 
 
 _CFG4 = [triton.Config({"BN": bn, "BK": bk}, num_warps=w, num_stages=st)
-         for bn in (32, 64) for bk in (128, 256) for w in (4,) for st in (3, 4)]
+         for bn in (32, 64, 128) for bk in (128, 256) for w in (4, 8) for st in (3, 4)]
 
 
 @triton.autotune(configs=_CFG4, key=["MB", "N", "K"])
@@ -114,25 +114,29 @@ def _fp4_mm_kernel(a_ptr, w_ptr, s_ptr, c_ptr, M, N, K, stride_am, stride_cm, MB
                    BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr, G: tl.constexpr):
     """W: uint8 [N, K/2] (low nibble = even k), scales bf16 [N, K/G]. BK counts unpacked k.
 
-    Decoded low/high nibbles are interleaved back into k order so one contiguous dot covers BK."""
+    Low (even k) and high (odd k) nibbles each meet the matching even / odd activation columns in
+    their own dot, so nothing is interleaved; group scales load once per (row, group) and broadcast
+    over the group, not once per weight (ultra-qwen3-tts)."""
     pid_n = tl.program_id(0)
     pid_m = tl.program_id(1)
     HB: tl.constexpr = BK // 2
+    NG: tl.constexpr = BK // G
     rm = pid_m * BM + tl.arange(0, BM)
     rn = pid_n * BN + tl.arange(0, BN)
     rj = tl.arange(0, HB)
+    rg = tl.arange(0, NG)
     acc = tl.zeros([BM, BN], dtype=tl.float32)
     for k0 in range(0, K, BK):
         j0 = k0 // 2
         packed = tl.load(w_ptr + rn[:, None] * (K // 2) + (j0 + rj)[None, :], mask=rn[:, None] < N, other=0)
-        grp = (k0 + 2 * rj) // G
-        sc = tl.load(s_ptr + rn[:, None] * (K // G) + grp[None, :], mask=rn[:, None] < N, other=0.0)
-        lo = _e2m1(packed & 0xF) * sc
-        hi = _e2m1(packed >> 4) * sc
-        w = tl.interleave(lo, hi)  # [BN, BK] in k order
-        rk = k0 + tl.arange(0, BK)
-        a = tl.load(a_ptr + rm[:, None] * stride_am + rk[None, :], mask=rm[:, None] < M, other=0.0)
-        acc = tl.dot(a, tl.trans(w), acc)
+        sc = tl.load(s_ptr + rn[:, None] * (K // G) + (k0 // G + rg)[None, :], mask=rn[:, None] < N, other=0.0)
+        sc3 = sc[:, :, None]
+        lo = tl.reshape(tl.reshape(_e2m1(packed & 0xF), (BN, NG, G // 2)) * sc3, (BN, HB))
+        hi = tl.reshape(tl.reshape(_e2m1(packed >> 4), (BN, NG, G // 2)) * sc3, (BN, HB))
+        ae = tl.load(a_ptr + rm[:, None] * stride_am + (k0 + 2 * rj)[None, :], mask=rm[:, None] < M, other=0.0)
+        ao = tl.load(a_ptr + rm[:, None] * stride_am + (k0 + 2 * rj + 1)[None, :], mask=rm[:, None] < M, other=0.0)
+        acc = tl.dot(ae, tl.trans(lo), acc)
+        acc = tl.dot(ao, tl.trans(hi), acc)
     tl.store(c_ptr + rm[:, None] * stride_cm + rn[None, :], acc.to(tl.bfloat16), mask=(rm[:, None] < M) & (rn[None, :] < N))
 
 
