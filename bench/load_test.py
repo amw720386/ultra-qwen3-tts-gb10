@@ -247,8 +247,8 @@ def main(variant: str = "CustomVoice", concs: str = "1,8,16,32,64", reqs_per_cli
     K = frames
     r = load.remote(variant, concs, reqs_per_client, K, max_slots, max_len, admit_per_iter=admit_per_iter, think_s=think_s,
                     overlap=overlap, packed=packed, save_wavs=save_wavs)
-    os.makedirs("results/phase3", exist_ok=True)
-    name = f"results/phase3/load-{variant}-K{K}-S{max_slots}{('-' + tag) if tag else ''}.json"
+    os.makedirs("results/h100/load_test", exist_ok=True)
+    name = f"results/h100/load_test/load-{variant}-K{K}-S{max_slots}{('-' + tag) if tag else ''}.json"
     json.dump(r, open(name, "w"), indent=1)
     print(json.dumps({k: v for k, v in r.items() if k != "closed_loop"}, indent=1))
     for C, res in r["closed_loop"].items():

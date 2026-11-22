@@ -430,7 +430,7 @@ def main(n: int = 60, systems: str = "ref-Base,ref-CustomVoice,fast-Base,fast-Cu
     for s in systems.split(","):
         kind, variant = s.split("-", 1)
         calls[s] = (gen_ref if kind == "ref" else gen_fast).spawn(variant, n)
-    os.makedirs("results/phase0", exist_ok=True)
+    os.makedirs("results/h100/baseline", exist_ok=True)
     evals = {"gt": gt_eval}
     for s, c in calls.items():
         try:
@@ -438,7 +438,7 @@ def main(n: int = 60, systems: str = "ref-Base,ref-CustomVoice,fast-Base,fast-Cu
         except Exception as e:
             print(f"[{s}] generation FAILED: {e!r}")
             continue
-        json.dump(r, open(f"results/phase0/gen-{s}.json", "w"), indent=1)
+        json.dump(r, open(f"results/h100/baseline/gen-{s}.json", "w"), indent=1)
         print(f"[{s}] done: n_ok={r['n_ok']}/{r['n']} acc-set RTF={r['accuracy_set_rtf']:.3f}")
         evals[s] = evaluate.spawn(s, n)
     for s, c in evals.items():
@@ -447,5 +447,5 @@ def main(n: int = 60, systems: str = "ref-Base,ref-CustomVoice,fast-Base,fast-Cu
         except Exception as e:
             print(f"[{s}] eval FAILED: {e!r}")
             continue
-        json.dump(r, open(f"results/phase0/eval-{s}.json", "w"), indent=1)
+        json.dump(r, open(f"results/h100/baseline/eval-{s}.json", "w"), indent=1)
         print(f"[{s}] WER={r['wer_corpus']*100:.2f}% sim={r['sim_mean']}")

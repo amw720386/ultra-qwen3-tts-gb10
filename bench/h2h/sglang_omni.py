@@ -1,6 +1,6 @@
 """Head-to-head: sglang-omni serving Qwen3-TTS-12Hz-1.7B-CustomVoice on one H100, measured with bench/h2h/client.py.
 
-    modal run bench/h2h/sglang_omni.py                 # full run -> results/h2h/sglang-omni.json
+    modal run bench/h2h/sglang_omni.py                 # full run -> results/h100/h2h/sglang-omni.json
     modal run bench/h2h/sglang_omni.py --quick         # smoke test (few texts, C<=8), not saved as the result
     modal run bench/h2h/sglang_omni.py --backend default   # CuTeDSL off (the CI latency-gate configuration)
 
@@ -210,9 +210,9 @@ def _safe(fn):
 @app.local_entrypoint()
 def main(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
     res = run.remote(backend=backend, quick=quick, tag=tag)
-    os.makedirs("results/h2h", exist_ok=True)
+    os.makedirs("results/h100/h2h", exist_ok=True)
     name = "sglang-omni" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}") + (f"-{tag}" if tag else "")
-    json.dump(res, open(f"results/h2h/{name}.json", "w"), indent=1)
+    json.dump(res, open(f"results/h100/h2h/{name}.json", "w"), indent=1)
     print("latency", json.dumps(res["latency"]["summary"]))
     print("sanity", res["sanity"])
     for c, s in res["load"].items():

@@ -262,9 +262,9 @@ def publish(cfg: str):
 def main(cfg: str = "fused", n_lat: int = 60, concs: str = "1,8,32,64,128,256", reqs_per_client: int = 4,
          final: bool = False, publish_only: bool = False, tag: str = ""):
     res = publish.remote(cfg) if publish_only else run.remote(cfg, n_lat, concs, reqs_per_client, final, tag)
-    os.makedirs("results/h2h", exist_ok=True)
+    os.makedirs("results/h100/h2h", exist_ok=True)
     name = "vllm-omni.json" if (final or publish_only) else f"vllm-omni-{tag or cfg}.json"
-    with open(f"results/h2h/{name}", "w") as f:
+    with open(f"results/h100/h2h/{name}", "w") as f:
         json.dump(res, f, indent=1)
     print(json.dumps(res["latency"]["summary"], indent=1))
     for c, s in res["load"].items():

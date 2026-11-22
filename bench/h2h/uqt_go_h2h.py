@@ -77,8 +77,8 @@ def run(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str =
 def main(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str = "uqtgo", fast_max: int = 8,
          reqs_per_client: int = 4):
     r = run.remote(concs, max_slots, max_len, tag, fast_max, reqs_per_client)
-    os.makedirs("results/h2h", exist_ok=True)
-    json.dump(r, open(f"results/h2h/{tag}.json", "w"), indent=1)
+    os.makedirs("results/h100/h2h", exist_ok=True)
+    json.dump(r, open(f"results/h100/h2h/{tag}.json", "w"), indent=1)
     print(json.dumps(r["latency"]["summary"], indent=1))
     for C, s in r["load"].items():
         print(C, json.dumps(s))

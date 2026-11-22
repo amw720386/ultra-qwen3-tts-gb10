@@ -65,8 +65,8 @@ def run(mode: str = "batch", variant: str = "CustomVoice", concs: str = ",".join
 @app.local_entrypoint()
 def main(mode: str = "batch", variant: str = "CustomVoice", concs: str = ",".join(map(str, CONCS))):
     r = run.remote(mode, variant, concs)
-    os.makedirs("results/h2h", exist_ok=True)
-    json.dump(r, open(f"results/h2h/uqt-{mode}.json", "w"), indent=1)
+    os.makedirs("results/h100/h2h", exist_ok=True)
+    json.dump(r, open(f"results/h100/h2h/uqt-{mode}.json", "w"), indent=1)
     print(json.dumps(r["latency"]["summary"], indent=1))
     for C, s in (r.get("load") or {}).items():
         print(C, json.dumps(s))

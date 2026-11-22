@@ -104,7 +104,7 @@ def parity(variant: str, dtype_name: str, k: int = 3, max_new: int = 120):
 @app.local_entrypoint()
 def parity_all():
     calls = {(v, d): parity.spawn(v, d) for v in ("Base", "CustomVoice") for d in ("fp32", "bf16")}
-    os.makedirs("results/phase1", exist_ok=True)
+    os.makedirs("results/h100/engine", exist_ok=True)
     res = {}
     for key, c in calls.items():
         try:
@@ -112,7 +112,7 @@ def parity_all():
         except Exception as e:
             res["-".join(key)] = {"error": repr(e)}
         print(key, json.dumps(res["-".join(key)])[:2000])
-    json.dump(res, open("results/phase1/parity.json", "w"), indent=1)
+    json.dump(res, open("results/h100/engine/parity.json", "w"), indent=1)
 
 
 @app.function(image=img, gpu=GPU, volumes=VOLS, timeout=7200)
@@ -247,14 +247,14 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
 @app.local_entrypoint()
 def bench_all(n: int = 60, variants: str = "Base,CustomVoice"):
     calls = {v: bench.spawn(v, n) for v in variants.split(",")}
-    os.makedirs("results/phase1", exist_ok=True)
+    os.makedirs("results/h100/engine", exist_ok=True)
     for v, c in calls.items():
         try:
             r = c.get()
         except Exception as e:
             print(f"[{v}] FAILED: {e!r}")
             continue
-        json.dump(r, open(f"results/phase1/gen-{r['tag']}.json", "w"), indent=1)
+        json.dump(r, open(f"results/h100/engine/gen-{r['tag']}.json", "w"), indent=1)
         print(f"[{v}] gen ms/frame={r['gen_ms_per_frame']} prefill={r['prefill_ms']:.1f}ms build={r['build_prompt_ms']:.1f}ms "
               f"dec8={r['decode_ms_8frames']:.1f}ms dec2={r['decode_ms_2frames']:.1f}ms")
         print(f"[{v}] {json.dumps(r['by_first_chunk'])} acc-set RTF={r['accuracy_set_rtf']:.3f}")

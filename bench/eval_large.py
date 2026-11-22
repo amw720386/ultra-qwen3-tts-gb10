@@ -98,16 +98,16 @@ def main(n: int = 300, seeds: str = "1,2", systems: str = "ref,eng", variants: s
         print(f"generated {tag_of(*c, prefix)}: {k}")
         evs[c] = evaluate.spawn(tag_of(*c, prefix), n, c[1] == "Base")
     res = {c: e.get() for c, e in evs.items()}
-    os.makedirs("results/phase2", exist_ok=True)
+    os.makedirs("results/h100/eval_large", exist_ok=True)
     summary = {}
     for c, r in res.items():
-        json.dump(r, open(f"results/phase2/eval-{tag_of(*c, prefix)}.json", "w"), indent=1)
+        json.dump(r, open(f"results/h100/eval_large/eval-{tag_of(*c, prefix)}.json", "w"), indent=1)
         summary[tag_of(*c, prefix)] = {"wer": r["wer_corpus"], "sim": r["sim_mean"], "n": r["n_eval"]}
     # pool seeds: rows keyed by (seed, id) so the bootstrap pairs ref/eng on the same utterance and seed
     if ref_prefix:  # reuse earlier official-implementation results from disk
         for v in variants.split(","):
             for sd in seeds.split(","):
-                res[("ref", v, int(sd))] = json.load(open(f"results/phase2/eval-{tag_of('ref', v, int(sd), ref_prefix)}.json"))
+                res[("ref", v, int(sd))] = json.load(open(f"results/h100/eval_large/eval-{tag_of('ref', v, int(sd), ref_prefix)}.json"))
     syss = set(systems.split(",")) | ({"ref"} if ref_prefix else set())
     for v in variants.split(","):
         pooled = {}
@@ -118,5 +118,5 @@ def main(n: int = 300, seeds: str = "1,2", systems: str = "ref,eng", variants: s
             pooled[s] = rows
         if "ref" in pooled and "eng" in pooled:
             summary[f"{v}: eng - ref (pooled seeds)"] = paired_bootstrap(pooled["ref"], pooled["eng"])
-    json.dump(summary, open(f"results/phase2/eval-large-summary-{prefix}.json", "w"), indent=1)
+    json.dump(summary, open(f"results/h100/eval_large/eval-large-summary-{prefix}.json", "w"), indent=1)
     print(json.dumps(summary, indent=1))
