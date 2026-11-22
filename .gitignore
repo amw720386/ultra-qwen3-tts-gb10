@@ -1,3 +1,26 @@
-results/ledger.jsonl
+# Python
 __pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated audio and scratch outputs
 *.wav
+*.flac
+*.log
+scratch/
+tmp/
+out/
+gen/
+
+# Private run ledger
+results/ledger.jsonl
+
+# Go gateway build output
+gateway/uqt-gw
+gateway/gateway
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
