@@ -200,6 +200,45 @@ def _bdec_attn_kernel(q_ptr, kc_ptr, vc_ptr, pos_ptr, o_ptr, scale, sk_b, sk_h, 
     tl.store(o_ptr + b * H * HD + hq[:, None] * HD + d[None, :], out.to(o_ptr.dtype.element_ty))
 
 
+@triton.jit
+def _bdec_attn_dot_kernel(q_ptr, kc_ptr, vc_ptr, pos_ptr, o_ptr, scale, sk_b, sk_h, sk_t,
+                          H: tl.constexpr, HD: tl.constexpr, BLK: tl.constexpr, G: tl.constexpr, GP: tl.constexpr):
+    """Tensor-core variant (from the H100 backport): the G query heads of one kv head padded to GP >= 16
+    rows, tl.dot per key block."""
+    b = tl.program_id(0)
+    kvh = tl.program_id(1)
+    pos = tl.load(pos_ptr + b).to(tl.int32)
+    d = tl.arange(0, HD)
+    gi = tl.arange(0, GP)
+    gm = gi < G
+    q = tl.load(q_ptr + b * H * HD + (kvh * G + gi)[:, None] * HD + d[None, :], mask=gm[:, None], other=0.0)
+    base = b.to(tl.int64) * sk_b + kvh.to(tl.int64) * sk_h
+    m = tl.full([GP], float("-inf"), tl.float32)
+    l = tl.zeros([GP], tl.float32)
+    acc = tl.zeros([GP, HD], tl.float32)
+    for t0 in range(0, pos + 1, BLK):
+        t = t0 + tl.arange(0, BLK)
+        tm = t <= pos
+        k = tl.load(kc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0)
+        s = tl.dot(q, tl.trans(k)) * scale  # [GP, BLK]
+        s = tl.where(tm[None, :], s, float("-inf"))
+        m_new = tl.maximum(m, tl.max(s, axis=1))
+        p = tl.exp(s - m_new[:, None])
+        alpha = tl.exp(m - m_new)
+        l = l * alpha + tl.sum(p, axis=1)
+        v = tl.load(vc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0)
+        acc = acc * alpha[:, None] + tl.dot(p.to(v.dtype), v)
+        m = m_new
+    out = acc / l[:, None]
+    tl.store(o_ptr + b * H * HD + (kvh * G + gi)[:, None] * HD + d[None, :], out.to(o_ptr.dtype.element_ty),
+             mask=gm[:, None])
+
+
+# "dot" = tensor-core kernel, "fma" = CUDA-core kernel. (BLK, warps, stages) for the dot kernel.
+BATTN_KIND = os.environ.get("UQT_BATTN_KIND", "fma")
+BATTN_DOT_CFG = tuple(int(x) for x in os.environ.get("UQT_BATTN_DOT_CFG", "64,8,1").split(","))  # GB10 sweep: bench/gb10/battn_micro.py
+
+
 @torch.library.custom_op("uqt::bdec_attn", mutates_args=())
 def bdec_attn(q: torch.Tensor, kc: torch.Tensor, vc: torch.Tensor, pos: torch.Tensor, scale: float) -> torch.Tensor:
     """q [B, H, HD]; kc/vc [S, KVH, T, HD] (one layer, row b = slot b); pos [B] -> [B, H * HD]."""
@@ -207,8 +246,14 @@ def bdec_attn(q: torch.Tensor, kc: torch.Tensor, vc: torch.Tensor, pos: torch.Te
     KVH = kc.shape[1]
     q = q.contiguous()
     out = torch.empty(B, H * HD, dtype=q.dtype, device=q.device)
+    G = H // KVH
+    if BATTN_KIND == "dot":
+        blk, nw, st = BATTN_DOT_CFG
+        _bdec_attn_dot_kernel[(B, KVH)](q, kc, vc, pos, out, scale, kc.stride(0), kc.stride(1), kc.stride(2),
+                                        H=H, HD=HD, BLK=blk, G=G, GP=max(16, G), num_warps=nw, num_stages=st)
+        return out
     _bdec_attn_kernel[(B, KVH)](q, kc, vc, pos, out, scale, kc.stride(0), kc.stride(1), kc.stride(2),
-                                H=H, HD=HD, BLK=32, G=H // KVH, num_warps=4)
+                                H=H, HD=HD, BLK=32, G=G, num_warps=4)
     return out
 
 
