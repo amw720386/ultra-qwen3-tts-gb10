@@ -1,11 +1,11 @@
-"""Phase 0: baseline speed + accuracy for Qwen3-TTS-12Hz-1.7B on one H100.
+"""Baseline speed + accuracy for Qwen3-TTS-12Hz-1.7B on one H100.
 
 Systems: official `qwen-tts` (reference) and `faster-qwen3-tts` (CUDA graphs).
 Variants: Base (voice clone, LibriSpeech test-clean prompts) and CustomVoice (preset speaker).
 Accuracy: Whisper large-v3 WER (Whisper English normalizer) and a WavLM speaker-similarity proxy.
 
-    modal run bench/phase0.py              # everything
-    modal run bench/phase0.py --n 20       # smaller accuracy set
+    modal run bench/baseline.py              # everything
+    modal run bench/baseline.py --n 20       # smaller accuracy set
 """
 import hashlib
 import json
@@ -14,7 +14,7 @@ import time
 
 import modal
 
-app = modal.App("uqt-phase0")
+app = modal.App("uqt-baseline")
 data_vol = modal.Volume.from_name("uqt-data", create_if_missing=True)
 hf_vol = modal.Volume.from_name("uqt-hf-cache", create_if_missing=True)
 VOLS = {"/data": data_vol, "/root/.cache/huggingface": hf_vol}

@@ -1,6 +1,6 @@
 """Large multi-seed accuracy comparison: official qwen-tts vs uqt engine.
 
-    modal run bench/phase0.py::prep --n-pairs 300
+    modal run bench/baseline.py::prep --n-pairs 300
     modal run bench/eval_large.py --n 300 --seeds 1,2
 """
 import json

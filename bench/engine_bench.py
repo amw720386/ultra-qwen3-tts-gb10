@@ -1,8 +1,8 @@
-"""Phase 1: correctness + speed of the uqt engine on one H100.
+"""Correctness + speed of the uqt engine on one H100.
 
-    modal run bench/phase1.py::parity_all           # greedy code parity vs official qwen-tts
-    modal run bench/phase1.py::bench_all --n 60     # latency + accuracy-set generation
-    modal run bench/phase0.py::evaluate --tag eng-Base --n 60   # Whisper WER / SIM
+    modal run bench/engine_bench.py::parity_all           # greedy code parity vs official qwen-tts
+    modal run bench/engine_bench.py::bench_all --n 60     # latency + accuracy-set generation
+    modal run bench/baseline.py::evaluate --tag eng-Base --n 60   # Whisper WER / SIM
 """
 import json
 import os
@@ -10,7 +10,7 @@ import time
 
 import modal
 
-app = modal.App("uqt-phase1")
+app = modal.App("uqt-engine-bench")
 data_vol = modal.Volume.from_name("uqt-data", create_if_missing=True)
 hf_vol = modal.Volume.from_name("uqt-hf-cache", create_if_missing=True)
 VOLS = {"/data": data_vol, "/root/.cache/huggingface": hf_vol}
@@ -231,7 +231,7 @@ def bench(variant: str, n: int, left: int = 25, tag: str = ""):
                     "ttfa_voiced_ms_median": med([t for t in timing if t["first_chunk"] == f], "ttfa_voiced_ms"),
                     "rtf_median": float(np.median([t["full_s"] / t["audio_s"] for t in timing if t["first_chunk"] == f and t["audio_s"]]))}
                 for f in SCHEDULES}
-    res = {"system": "uqt engine (phase1)", "variant": variant, "tag": tag, "left_context": left,
+    res = {"system": "uqt engine", "variant": variant, "tag": tag, "left_context": left,
            "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
            "warmup_s": warm_s, "gen_ms_per_frame": gen, "build_prompt_ms": build_ms, "prefill_ms": prefill_ms,
            "decode_ms_8frames": dec8_ms, "decode_ms_2frames": dec2_ms, "prompt_len": int(p.embeds.shape[0]),
@@ -502,7 +502,7 @@ def codec_test():
                     chunks.append(eng._sdec_call(gen[pos:pos + k], base + pos).cpu().numpy().copy())
                     pos += k; j += 1
                 st = np.concatenate(chunks)
-                # windowed decode (phase-1 path), left 25
+                # windowed decode (original non-stateful path), left 25
                 full = torch.cat([ref, gen], 0)
                 pos, j, wch = 0, 0, []
                 while pos < gen.shape[0]:
