@@ -50,6 +50,13 @@ uses indexed assignment for cache writes.
 Server experiments kept as opt-in switches (measured on GB10, no throughput gain at 1-256 clients):
 `UQT_K_HIGH=4` (4-frame steps under load), `UQT_ADMIT_MIN=4` (batch admissions under load),
 `UQT_EARLY_CHUNKS=2` (never defer the second audio chunk; fewer underruns at 64 clients only).
+FP4 weights (`--weights fp4`, e2m1 with a bf16 scale per 32 weights) are kept opt-in: the rewritten
+FP4 kernel beats FP8 on single-row GEMMs (talker MLP up-projection 0.073 vs 0.112 ms) and the
+300-clip WER is 2.45% (one catastrophic failure included), but end to end it only improves
+single-stream generation from 13.7 to 13.1 ms/frame, while prefill and batches above 16 rows get
+slower (the code predictor's small GEMMs are latency-bound, not bandwidth-bound). GB10 has native
+FP4 tensor-core instructions, but Triton (3.4 and 3.7) lowers `tl.dot_scaled` on sm_121 to a
+software upcast plus bf16 MMA, so they are not used here.
 Measured but not adopted: a W8A8 Triton GEMM (FP8 activations per row per K block) ran no faster
 than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8_triton_test.json`).
 
