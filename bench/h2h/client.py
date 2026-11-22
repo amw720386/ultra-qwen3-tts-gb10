@@ -32,11 +32,15 @@ THRESH = 10 ** (-40 / 20)
 
 
 def _voiced_offset(pcm: np.ndarray):
+    """Index of the first 10 ms window with RMS above -40 dBFS (vectorized: no Python loop per window,
+    so measuring one stream does not stall the event loop that receives all the others)."""
     win = SR // 100
-    for i in range(0, len(pcm) - win + 1, win):
-        if float(np.sqrt(np.mean(pcm[i:i + win] ** 2))) >= THRESH:
-            return i
-    return None
+    n = len(pcm) // win
+    if n == 0:
+        return None
+    rms = np.sqrt(np.mean(pcm[: n * win].reshape(n, win) ** 2, axis=1))
+    hit = np.flatnonzero(rms >= THRESH)
+    return int(hit[0]) * win if len(hit) else None
 
 
 async def _one(client, url, payload, extra_headers=None):
@@ -46,6 +50,7 @@ async def _one(client, url, payload, extra_headers=None):
     chunks = []  # (t, bytes)
     async with client.stream("POST", url, json=payload, headers=extra_headers or {},
                              timeout=httpx.Timeout(600.0)) as r:
+        t_hdr = time.perf_counter()
         if r.status_code != 200:
             body = await r.aread()
             raise RuntimeError(f"HTTP {r.status_code}: {body[:300]!r}")
@@ -57,7 +62,7 @@ async def _one(client, url, payload, extra_headers=None):
     raw = raw[: len(raw) - (len(raw) % 2)]
     pcm = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
     dur = len(pcm) / SR
-    rec = {"t0": t0, "n_bytes": len(raw), "audio_s": dur, "n_chunks": len(chunks)}
+    rec = {"t0": t0, "n_bytes": len(raw), "audio_s": dur, "n_chunks": len(chunks), "hdr_ms": (t_hdr - t0) * 1000}
     if not chunks or dur == 0:
         rec["error"] = "no audio"
         return rec, pcm
@@ -95,6 +100,7 @@ def _summ(recs):
         "rtf_p50": _pct(g("rtf"), 50), "rtf_p90": _pct(g("rtf"), 90),
         "total_rtf_p50": _pct(g("total_rtf"), 50),
         "underrun_frac": sum(1 for r in ok if r.get("max_late_ms", 0) > 0) / max(len(ok), 1),
+        "hdr_ms_p50": _pct(g("hdr_ms"), 50), "hdr_ms_p90": _pct(g("hdr_ms"), 90),
     }
 
 
@@ -121,39 +127,65 @@ def latency(url, make_payload, texts, ids=None, out_dir=None, warmup=3, headers=
     return {"summary": _summ(recs), "requests": [{k: v for k, v in r.items() if k != "t0"} for r in recs]}
 
 
-def load(url, make_payload, texts, concs=(1, 8, 32, 64, 128, 256), reqs_per_client=4, ramp_s=0.5,
-         headers=None, max_connections=1024):
-    """Closed-loop back-to-back clients at each concurrency; returns per-concurrency summaries."""
+def _load_shard(args):
+    """One load-generator process: n clients (global indices offset..offset+n) of a C-client run."""
     import httpx
 
+    url, payloads, offset, n, C, reqs_per_client, ramp_s, t_start, headers = args
+
+    async def run():
+        limits = httpx.Limits(max_connections=n + 8, max_keepalive_connections=n + 8)
+        async with httpx.AsyncClient(limits=limits) as client:
+            recs = []
+
+            async def worker(ci):
+                g = offset + ci
+                await asyncio.sleep(max(0.0, t_start - time.time()) + g * ramp_s / C)
+                for j in range(reqs_per_client):
+                    p = payloads[(g * reqs_per_client + j) % len(payloads)]
+                    try:
+                        rec, _pcm = await _one(client, url, p, headers)
+                    except Exception as e:  # count failures, keep going
+                        rec = {"error": repr(e)[:200], "audio_s": 0}
+                    rec.pop("t0", None)
+                    rec["end_wall"] = time.time()
+                    recs.append(rec)
+
+            await asyncio.gather(*[worker(i) for i in range(n)])
+            return recs
+
+    return asyncio.run(run())
+
+
+def load(url, make_payload, texts, concs=(1, 8, 32, 64, 128, 256), reqs_per_client=4, ramp_s=0.5,
+         headers=None, max_connections=1024, clients_per_proc=32, max_procs=16):
+    """Closed-loop back-to-back clients at each concurrency; returns per-concurrency summaries.
+
+    A single asyncio/httpx process saturates around 200 audio-seconds per second of streamed PCM, so
+    the clients are spread over several processes (about `clients_per_proc` each, at most `max_procs`)
+    that start together and report per-request records."""
+    import multiprocessing as mp
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    os.environ["PYTHONPATH"] = here + (os.pathsep + os.environ["PYTHONPATH"] if os.environ.get("PYTHONPATH") else "")
+    payloads = [make_payload(t) for t in texts]
+    ctx = mp.get_context("spawn")
     out = {}
     for C in concs:
-        async def run():
-            limits = httpx.Limits(max_connections=max_connections, max_keepalive_connections=max_connections)
-            async with httpx.AsyncClient(limits=limits) as client:
-                recs = []
-                k = [0]
-
-                async def worker(ci):
-                    await asyncio.sleep(ci * ramp_s / C)
-                    for _ in range(reqs_per_client):
-                        t = texts[k[0] % len(texts)]
-                        k[0] += 1
-                        try:
-                            rec, pcm = await _one(client, url, make_payload(t), headers)
-                        except Exception as e:  # count failures, keep going
-                            rec = {"error": repr(e)[:200], "t0": time.perf_counter(), "audio_s": 0}
-                        rec["end"] = time.perf_counter()
-                        recs.append(rec)
-
-                t0 = time.perf_counter()
-                await asyncio.gather(*[worker(i) for i in range(C)])
-                wall = time.perf_counter() - t0
-                return recs, wall
-
-        recs, wall = asyncio.run(run())
+        procs = max(1, min(max_procs, -(-C // clients_per_proc)))
+        sizes = [C // procs + (1 if i < C % procs else 0) for i in range(procs)]
+        offs = [sum(sizes[:i]) for i in range(procs)]
+        t_start = time.time() + 2.0 + 0.2 * procs  # let every process import and connect first
+        jobs = [(url, payloads, offs[i], sizes[i], C, reqs_per_client, ramp_s, t_start, headers) for i in range(procs)]
+        if procs == 1:
+            parts = [_load_shard(jobs[0])]
+        else:
+            with ctx.Pool(procs) as pool:
+                parts = pool.map(_load_shard, jobs)
+        recs = [r for part in parts for r in part]
+        wall = max(r["end_wall"] for r in recs) - t_start
         s = _summ(recs)
-        s.update({"C": C, "wall_s": wall, "audio_s": sum(r.get("audio_s", 0) for r in recs),
+        s.update({"C": C, "procs": procs, "wall_s": wall, "audio_s": sum(r.get("audio_s", 0) for r in recs),
                   "throughput_audio_s_per_s": sum(r.get("audio_s", 0) for r in recs) / wall,
                   "errors": [r["error"] for r in recs if "error" in r][:3]})
         print("h2h-load", json.dumps(s), flush=True)

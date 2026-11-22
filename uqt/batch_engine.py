@@ -192,7 +192,8 @@ class BatchEngine:
         self.dec_stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(self.dec_stream):
             R = self._prime(slot, prompt.ref_codes)
-        self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta)
+        self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta,
+                                  valid=0, dec=0, ci=0)
 
     # ---- packed batched prefill: several prompts in one forward (positions restart per prompt,
     #      block-diagonal causal mask), then each prompt's K/V is copied into its slot.
@@ -304,7 +305,8 @@ class BatchEngine:
             self.dec_stream.wait_stream(torch.cuda.current_stream())
             with torch.cuda.stream(self.dec_stream):
                 R = self._prime(slot, p.ref_codes)
-            self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta)
+            self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta,
+                                  valid=0, dec=0, ci=0)
 
     def release(self, slot: int):
         self.info[slot] = None
@@ -374,8 +376,108 @@ class BatchEngine:
             it["frames"] += K
             if k < K or it["frames"] >= it["max_frames"]:
                 it["done"] = True
+            it["valid"] = it.get("valid", 0) + k
             valid.append(k)
         return act, chunk, valid
+
+    # ---- growing decode chunks: first chunk after 2 frames (fast start), then 4, 8, 16 frames per
+    #      decode call, so the codec runs far fewer, larger batches per second of audio.
+    RAMP = (2, 4, 8, 16)
+    # streams x frames per codec call: the late codec layers launch (rows / 32) blocks on one grid axis,
+    # which must stay below 65535 (rows = streams * frames * 1920 samples)
+    DEC_FRAME_BUDGET = 1024
+
+    def _dec_max_b(self, F):
+        return max(1, min(self.S, self.DEC_FRAME_BUDGET // F))
+
+    def _dec_graph(self, F):
+        from uqt.streaming_codec import StreamingDecodeGraphs
+
+        g = self.dec_graphs.get(F)
+        if g is None:
+            sizes = [b for b in B_BUCKETS if b <= self._dec_max_b(F)]
+            g = StreamingDecodeGraphs(self.sdec, sizes, frames=F, pool=self._dec_pool)
+            self._dec_pool = g.pool
+            self.dec_graphs[F] = g
+        return g
+
+    def decode_due(self):
+        """Synchronous convenience wrapper: launch due decodes and wait for them."""
+        return self.decode_finish(self.decode_launch())
+
+    def decode_launch(self):
+        """Launch decodes for every slot whose pending frames reached its next chunk size (or that
+        finished) on the decode stream, without waiting. PCM is converted to int16 on the GPU and
+        copied asynchronously into pinned host memory. Bookkeeping advances at launch time.
+        Returns a handle for decode_finish()."""
+        groups = {}
+        for s, it in enumerate(self.info):
+            if it is None or it.get("flushed"):
+                continue
+            pend = it["valid"] - it["dec"]
+            if pend <= 0:
+                if it["done"]:
+                    groups.setdefault(0, []).append((s, 0))
+                continue
+            target = self.RAMP[min(it["ci"], len(self.RAMP) - 1)]
+            if pend >= target:
+                groups.setdefault(target, []).append((s, target))
+            elif it["done"]:
+                F = next(f for f in self.RAMP if f >= pend)
+                groups.setdefault(F, []).append((s, pend))
+        calls = []
+        for F, items in groups.items():
+            if F == 0:
+                for s, _ in items:
+                    self.info[s]["flushed"] = True
+                calls.append((None, None, [(s, 0, True) for s, _ in items], 0))
+                continue
+            g = self._dec_graph(F)
+            mb = self._dec_max_b(F)
+            for j in range(0, len(items), mb):
+                calls.append(self._decode_group(g, F, items[j:j + mb]))
+        return calls
+
+    def decode_finish(self, calls):
+        """Wait for launched decodes -> [(slot, int16 pcm bytes or None, finished)]."""
+        out = []
+        up = self.sdec.spf
+        for host, ev, items, F in calls:
+            if ev is not None:
+                ev.synchronize()
+                arr = host.numpy()
+            for i, (s, n, fin) in enumerate(items):
+                b = arr[i, :n * up].tobytes() if (ev is not None and n) else None
+                out.append((s, b, fin))
+        return out
+
+    def _decode_group(self, g, F, items):
+        self.dec_calls = getattr(self, "dec_calls", 0) + 1
+        slots = [s for s, _ in items]
+        with torch.cuda.stream(self.dec_stream):
+            self.dec_stream.wait_stream(torch.cuda.current_stream())
+            rows = torch.tensor(slots, device=self.dev)
+            starts = torch.tensor([self.info[s]["dec"] for s in slots], device=self.dev)
+            idx = (starts[:, None] + torch.arange(F, device=self.dev)[None, :]).clamp(max=self.L - 1)
+            codes = self.codes[rows[:, None], idx]
+            pos = torch.tensor([self.info[s]["dec_pos"] for s in slots], dtype=torch.int32, device=self.dev)
+            wav = g(codes.contiguous(), rows.to(torch.int32), pos)
+            pcm = (wav.clamp(-1.0, 1.0) * 32767.0).to(torch.int16)
+            host = torch.empty(pcm.shape, dtype=torch.int16, pin_memory=True)
+            host.copy_(pcm, non_blocking=True)
+            ev = torch.cuda.Event()
+            ev.record(self.dec_stream)
+        res = []
+        for s, n in items:
+            it = self.info[s]
+            it["dec"] += n
+            it["dec_pos"] += F
+            it["ci"] += 1
+            fin = it["done"] and it["dec"] >= it["valid"]
+            if fin:
+                it["flushed"] = True
+            res.append((s, n, fin))
+        return (host, ev, res, F)
 
     def decode(self, slots, chunk, valid):
         """Batched streaming decode of the K new frames of each slot -> list of float32 numpy arrays."""
@@ -409,6 +511,8 @@ class BatchEngine:
                 for Lb in Lbs:
                     self._graph(K, B, Lb)
         self.warm_pack()
+        for F in self.RAMP:
+            self._dec_graph(F)
         for K in Ks:
             self.info[0] = dict(dec_pos=0)
             self.decode([0], torch.zeros(1, K, 16, dtype=torch.long, device=self.dev), [0])

@@ -88,9 +88,9 @@ def _sh(cmd):
         return repr(e)
 
 
-@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=5400, cpu=16, memory=65536)
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=5400, cpu=16.0, memory=65536)
 def run(cfg: str = "fused", n_lat: int = 60, concs: str = "1,8,32,64,128,256", reqs_per_client: int = 4,
-        final: bool = False):
+        final: bool = False, tag: str = ""):
     import httpx
     import numpy as np
     import soundfile as sf
@@ -150,7 +150,7 @@ def run(cfg: str = "fused", n_lat: int = 60, concs: str = "1,8,32,64,128,256", r
 
     def finish(res):
         import shutil
-        shutil.copy(log_path, f"/data/results/h2h-vllm-logs/{cfg}.log")
+        shutil.copy(log_path, f"/data/results/h2h-vllm-logs/{tag or cfg}.log")
         data_vol.commit()
         return res
 
@@ -196,7 +196,7 @@ def run(cfg: str = "fused", n_lat: int = 60, concs: str = "1,8,32,64,128,256", r
         load(url, make_payload, all_texts[-64:], concs=(1, 16, 128), reqs_per_client=1)
         info["warmup_s"] = time.time() - t
 
-        out_dir = f"/data/gen/h2h-vllm-CustomVoice-{cfg}"
+        out_dir = f"/data/gen/h2h-vllm-CustomVoice-{tag or cfg}"
         lat = latency(url, make_payload, all_texts[:n_lat], ids=[m["id"] for m in man[:n_lat]], out_dir=out_dir)
         print("latency", json.dumps(lat["summary"]), flush=True)
 
@@ -213,9 +213,9 @@ def run(cfg: str = "fused", n_lat: int = 60, concs: str = "1,8,32,64,128,256", r
 
         ld = load(url, make_payload, all_texts, concs=tuple(int(c) for c in concs.split(",")),
                   reqs_per_client=reqs_per_client)
-        res = {**info, "latency": lat, "load": {str(k): v for k, v in ld.items()}, "gen_dir": out_dir}
+        res = {**info, "tag": tag, "latency": lat, "load": {str(k): v for k, v in ld.items()}, "gen_dir": out_dir}
         os.makedirs("/data/results", exist_ok=True)
-        with open(f"/data/results/h2h-vllm-{cfg}.json", "w") as f:
+        with open(f"/data/results/h2h-vllm-{tag or cfg}.json", "w") as f:
             json.dump(res, f, indent=1)
         if final:
             import shutil
@@ -260,10 +260,10 @@ def publish(cfg: str):
 
 @app.local_entrypoint()
 def main(cfg: str = "fused", n_lat: int = 60, concs: str = "1,8,32,64,128,256", reqs_per_client: int = 4,
-         final: bool = False, publish_only: bool = False):
-    res = publish.remote(cfg) if publish_only else run.remote(cfg, n_lat, concs, reqs_per_client, final)
+         final: bool = False, publish_only: bool = False, tag: str = ""):
+    res = publish.remote(cfg) if publish_only else run.remote(cfg, n_lat, concs, reqs_per_client, final, tag)
     os.makedirs("results/h2h", exist_ok=True)
-    name = "vllm-omni.json" if (final or publish_only) else f"vllm-omni-{cfg}.json"
+    name = "vllm-omni.json" if (final or publish_only) else f"vllm-omni-{tag or cfg}.json"
     with open(f"results/h2h/{name}", "w") as f:
         json.dump(res, f, indent=1)
     print(json.dumps(res["latency"]["summary"], indent=1))

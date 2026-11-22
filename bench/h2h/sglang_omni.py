@@ -89,8 +89,8 @@ def _tail(path, n=80):
         return ""
 
 
-@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=5400)
-def run(backend: str = "cutedsl", quick: bool = False):
+@app.function(image=img, gpu=GPU, volumes=VOLS, timeout=5400, cpu=16.0, memory=65536)
+def run(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
     sys.path.insert(0, "/root/h2h")
     import httpx
     import numpy as np
@@ -150,7 +150,7 @@ def run(backend: str = "cutedsl", quick: bool = False):
         lat_ids = [m["id"] for m in man[:n_lat]]
         all_texts = [m["target_text"] for m in man]
         concs = (1, 8) if quick else (1, 8, 32, 64, 128, 256)
-        out_dir = "/data/gen/h2h-sgl-CustomVoice" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}")
+        out_dir = "/data/gen/h2h-sgl-CustomVoice" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}") + (f"-{tag}" if tag else "")
 
         # extra warmup beyond the server's own startup warmup: sequential + batched shapes (discarded)
         t_w = time.time()
@@ -173,7 +173,8 @@ def run(backend: str = "cutedsl", quick: bool = False):
 
         ld = load(url, make_payload, all_texts, concs=concs, reqs_per_client=4)
         res = {
-            "system": "sglang-omni", "model": MODEL, "backend": backend, "quick": quick,
+            "system": "sglang-omni", "model": MODEL, "backend": backend, "quick": quick, "tag": tag,
+            "container": {"cpu": 16.0, "memory_mib": 65536, "nproc": os.cpu_count()},
             "versions": _versions(),
             "config": {"cmd": cmd, "env": {k: env[k] for k in env if k.startswith(("SGLANG_OMNI", "TORCHINDUCTOR"))},
                        "payload": make_payload("<text>"), "response_headers": hdr, "startup_s": startup_s},
@@ -183,7 +184,7 @@ def run(backend: str = "cutedsl", quick: bool = False):
                                          if any(k in l.lower() for k in ("cutedsl", "cute dsl", "qtts_backend", "stateful", "codec_state", "incremental"))][:40],
         }
         os.makedirs("/data/results", exist_ok=True)
-        name = "h2h-sgl" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}")
+        name = "h2h-sgl" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}") + (f"-{tag}" if tag else "")
         json.dump(res, open(f"/data/results/{name}.json", "w"), indent=1)
         subprocess.run(["cp", log_path, f"/data/results/{name}-server.log"])
         data_vol.commit()
@@ -207,10 +208,10 @@ def _safe(fn):
 
 
 @app.local_entrypoint()
-def main(backend: str = "cutedsl", quick: bool = False):
-    res = run.remote(backend=backend, quick=quick)
+def main(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
+    res = run.remote(backend=backend, quick=quick, tag=tag)
     os.makedirs("results/h2h", exist_ok=True)
-    name = "sglang-omni" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}")
+    name = "sglang-omni" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}") + (f"-{tag}" if tag else "")
     json.dump(res, open(f"results/h2h/{name}.json", "w"), indent=1)
     print("latency", json.dumps(res["latency"]["summary"]))
     print("sanity", res["sanity"])
