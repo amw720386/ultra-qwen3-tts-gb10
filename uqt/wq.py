@@ -21,7 +21,7 @@ import triton.language as tl
 
 E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 FP4_GROUP = 32
-FP8_BIG = os.environ.get("UQT_FP8_BIG", "0") == "1"  # FP8 kernel above MAX_ROWS too (opt-in until measured)
+FP8_BIG = os.environ.get("UQT_FP8_BIG", "1") == "1"  # FP8 kernel above MAX_ROWS for the shapes where it wins
 BIG_MAX_ROWS = int(os.environ.get("UQT_FP8_BIG_MAX", "320"))  # batched decode sizes; prefill stays bf16
 MAX_ROWS = 128  # above this the work is compute-bound: bf16 cuBLAS wins (measured on GB10)
 
@@ -212,7 +212,10 @@ def lin(x: torch.Tensor, w) -> torch.Tensor:
     lead = x.shape[:-1]
     x2 = x.reshape(-1, x.shape[-1])
     if x2.shape[0] > MAX_ROWS:
-        if FP8_BIG and w.kind == "fp8" and x2.shape[0] <= BIG_MAX_ROWS:
+        # Measured on GB10 (bench/gb10/wq_big_test.py): FP8 wins for every shape up to ~192 rows, and
+        # for the widest projections (N >= 8192) up to 320; otherwise bf16 cuBLAS is as fast or faster.
+        m = x2.shape[0]
+        if FP8_BIG and w.kind == "fp8" and (m <= 192 or (w.N >= 8192 and m <= BIG_MAX_ROWS)):
             return fp8_mm_big(x2, w.data, w.scale, w.N, w.K).reshape(*lead, w.N)
         return torch.nn.functional.linear(x, w.bf16)
     out = wq_mm(x2, w.data, w.scale, 0 if w.kind == "fp8" else 1, w.N, w.K)
