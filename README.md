@@ -75,6 +75,9 @@ than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8
   - fused residual unit: conv1 + activation + conv2 + residual add in one kernel;
   - fused block entry: SnakeBeta + transposed convolution as one implicit GEMM;
   - fused output convolution with the final SnakeBeta folded in.
+- **Tensor-core decode attention** (`UQT_BATTN_KIND=dot`, default; ported from the H100 backport):
+  the two query heads of each kv head padded to 16 rows and attended with `tl.dot`, +1-3% engine
+  throughput on GB10 (`UQT_BATTN_KIND=fma` restores the CUDA-core kernel).
 - **Single-launch K/V cache writes** for the batched step (`kernels.kv_write_rows`).
 - **Tuned implicit-GEMM tiles**: tile shapes per decoder width (including the 768-wide units),
   swept on GB10 at the shapes the batched engine runs.

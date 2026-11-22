@@ -235,7 +235,7 @@ def _bdec_attn_dot_kernel(q_ptr, kc_ptr, vc_ptr, pos_ptr, o_ptr, scale, sk_b, sk
 
 
 # "dot" = tensor-core kernel, "fma" = CUDA-core kernel. (BLK, warps, stages) for the dot kernel.
-BATTN_KIND = os.environ.get("UQT_BATTN_KIND", "fma")
+BATTN_KIND = os.environ.get("UQT_BATTN_KIND", "dot")  # dot: +1-3% engine throughput on GB10 (results/gb10/scan-battn-*.json)
 BATTN_DOT_CFG = tuple(int(x) for x in os.environ.get("UQT_BATTN_DOT_CFG", "64,8,1").split(","))  # GB10 sweep: bench/gb10/battn_micro.py
 
 
