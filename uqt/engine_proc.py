@@ -115,6 +115,11 @@ def selfwarm(eng, be, waves=(1, 16, 64, 256, 512), K=2, max_frames=120):
 
 K_HIGH = int(os.environ.get("UQT_K_HIGH", "0"))  # frames per step once K_HIGH_AT streams are active (0: off)
 K_HIGH_AT = int(os.environ.get("UQT_K_HIGH_AT", "96"))
+# admission batching under load: with >= ADMIT_AT active streams, admit once ADMIT_MIN requests wait or
+# the oldest has waited ADMIT_WAIT_MS (ADMIT_MIN <= 1: off)
+ADMIT_MIN = int(os.environ.get("UQT_ADMIT_MIN", "1"))
+ADMIT_AT = int(os.environ.get("UQT_ADMIT_AT", "32"))
+ADMIT_WAIT_MS = float(os.environ.get("UQT_ADMIT_WAIT_MS", "60"))
 
 
 def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True):
@@ -126,23 +131,38 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
     conn.sendall(HDR.pack(READY, 0, 0))
     handle = None
     pending_dec = None
+    waiting: list = []  # requests held for a shared packed prefill (see ADMIT_*)
     stats = {"iters": 0, "admit": 0.0, "gen": 0.0, "dec": 0.0, "send": 0.0, "dec_calls": 0, "admitted": 0,
              "active": 0, "t": time.perf_counter()}
     with torch.inference_mode():
         while True:
-            if handle is None and pending_dec is None and not be.active() and all(it is None for it in be.info):
+            if (handle is None and pending_dec is None and not waiting and not be.active()
+                    and all(it is None for it in be.info)):
                 q.put(q.get())  # idle: block until a request arrives
             t_a = time.perf_counter()
-            # admission
+            # admission. Under load, hold new requests briefly so several share one packed prefill
+            # (the prefill reads every weight once however many prompts it carries).
+            hold = False
+            if ADMIT_MIN > 1 and len(be.active()) >= ADMIT_AT:
+                while True:
+                    try:
+                        waiting.append(q.get_nowait())
+                    except queue.Empty:
+                        break
+                if waiting and len(waiting) < ADMIT_MIN and (t_a - waiting[0][1]["_recv"]) * 1e3 < ADMIT_WAIT_MS:
+                    hold = True
             batch, taken = [], set()
-            while len(batch) < admit_per_iter:
+            while len(batch) < admit_per_iter and not hold:
                 slot = next((i for i, it in enumerate(be.info) if it is None and i not in taken), None)
                 if slot is None:
                     break
-                try:
-                    rid, req = q.get_nowait()
-                except queue.Empty:
-                    break
+                if waiting:
+                    rid, req = waiting.pop(0)
+                else:
+                    try:
+                        rid, req = q.get_nowait()
+                    except queue.Empty:
+                        break
                 if rid in cancelled:
                     continue
                 try:
