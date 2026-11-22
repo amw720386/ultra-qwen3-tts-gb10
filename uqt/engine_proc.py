@@ -227,6 +227,7 @@ def main():
     ap.add_argument("--variant", default="CustomVoice")
     ap.add_argument("--max-slots", type=int, default=512)
     ap.add_argument("--max-len", type=int, default=512)
+    ap.add_argument("--weights", default=os.environ.get("UQT_WEIGHTS", "bf16"))
     args = ap.parse_args()
 
     import torch
@@ -240,7 +241,7 @@ def main():
     tts = Qwen3TTSModel.from_pretrained(f"Qwen/Qwen3-TTS-12Hz-1.7B-{args.variant}", device_map="cuda:0",
                                         dtype=torch.bfloat16, attn_implementation="sdpa")
     with torch.inference_mode():
-        eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False)
+        eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
         be = BatchEngine(eng, max_slots=args.max_slots, max_len=args.max_len)
         be.warmup(Ks=(2,))
         wp = eng.build_prompt("custom", text="Warming up the fast lane for new requests.", language="English",

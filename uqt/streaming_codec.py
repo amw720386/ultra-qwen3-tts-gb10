@@ -446,6 +446,27 @@ def _conv_out_part_kernel(
 
 
 @triton.jit
+def _mm_res_kernel(s_ptr, w_ptr, x_ptr, rows, C: tl.constexpr, BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
+    """x[rows, C] += s[rows, C] @ w[C, C] in place, fp32 accumulate (ultra-qwen3-tts; cuBLAS addmm_ is slow here).
+
+    Each program reads and writes only its own x tile, so in place is safe.
+    """
+    r = tl.program_id(0) * BM + tl.arange(0, BM)
+    n = tl.program_id(1) * BN + tl.arange(0, BN)
+    rm = r < rows
+    rr = tl.where(rm, r, 0).to(tl.int64)
+    k = tl.arange(0, BK)
+    acc = tl.zeros([BM, BN], dtype=tl.float32)
+    for k0 in range(0, C, BK):
+        a = tl.load(s_ptr + rr[:, None] * C + (k0 + k)[None, :])
+        b = tl.load(w_ptr + (k0 + k)[:, None] * C + n[None, :])
+        acc = tl.dot(a, b, acc)
+    xo = x_ptr + rr[:, None] * C + n[None, :]
+    acc += tl.load(xo, mask=rm[:, None], other=0.0).to(tl.float32)
+    tl.store(xo, acc.to(x_ptr.dtype.element_ty), mask=rm[:, None])
+
+
+@triton.jit
 def _rms_norm_kernel(x_ptr, w_ptr, out_ptr, eps, N: tl.constexpr):
     row = tl.program_id(0).to(tl.int64)
     offs = tl.arange(0, N)
@@ -749,7 +770,12 @@ def _snake_params(module) -> tuple[torch.Tensor, torch.Tensor]:
 # Dilated unit convs of these widths run as one implicit GEMM (BM, BN, BC, warps)
 # instead of a K-times patch matrix plus cuBLAS: the patch traffic dominates for
 # the long, narrow late blocks. The widest block is faster as patch + GEMM.
-_DILATED_IGEMM = {384: (128, 128, 64, 8), 192: (128, 64, 64, 4), 96: (128, 128, 32, 4)}
+_DILATED_IGEMM = {
+    768: (64, 256, 32, 8, 3), 384: (128, 128, 32, 8, 4), 192: (128, 128, 32, 8, 4), 96: (128, 64, 32, 8, 4),
+}  # (BM, BN, BC, warps, stages), swept on GB10 (bench/gb10/unit_micro.py)
+# Residual 1x1 conv as a Triton GEMM for these widths: (BM, BN, BK, warps, stages). Empty: on GB10 cuBLAS
+# addmm_ in place beats it (384 wide: 0.94 vs 1.31 ms at 256 x 2 frames).
+_MM_RES: dict = {}
 # Fused residual unit (conv1 + act2 + conv2 + residual) tiles per width: (BM, BC, warps, stages).
 # Fused block entry (SnakeBeta + transposed conv) tiles per output width: (BM, BN, BK, warps, stages).
 _TRANS = {96: (64, 64, 32, 4, 2), 192: (128, 128, 32, 4, 2), 384: (128, 128, 32, 4, 2)}  # widest block: unfused is faster
@@ -937,6 +963,8 @@ class StreamingCodecDecoder(nn.Module):
 
         self.res_unit = self.dilated_igemm and os.environ.get("UQT_RES_UNIT", "1") == "1"
         self.fused_trans = self.dilated_igemm and os.environ.get("UQT_FUSED_TRANS", "1") == "1"
+        self.mm_res = self.dilated_igemm and os.environ.get("UQT_MM_RES", "1") == "1"
+        self.igemm_d1 = os.environ.get("UQT_IGEMM_D1", "1") == "1"
         self.marks = None  # profiling: list of (name, cuda event) appended during forward
 
     def _mark(self, name):
@@ -1011,12 +1039,12 @@ class StreamingCodecDecoder(nn.Module):
         spec = u["conv1"]
         ext = self._im2col(x, spec, T, slots, pos, bias=u["pb"], snake=u["act1"], ext=True)
         rows, c = x.shape
-        bm, bn, bc, warps = _DILATED_IGEMM[c]
+        bm, bn, bc, warps, stages = _DILATED_IGEMM[c]
         out = torch.empty(rows, spec.weight.shape[1], device=x.device, dtype=self.dtype)
         alpha, ibeta = u["act2"]
         _dilated_conv_snake_kernel[(triton.cdiv(rows, bm), triton.cdiv(out.shape[1], bn))](
             ext, spec.weight, out, u["b1"], alpha, ibeta, T, rows,
-            C=c, N=out.shape[1], K=spec.k, D=spec.d, BM=bm, BN=bn, BC=bc, num_warps=warps, num_stages=3,
+            C=c, N=out.shape[1], K=spec.k, D=spec.d, BM=bm, BN=bn, BC=bc, num_warps=warps, num_stages=stages,
         )  # fmt: skip
         return out
 
@@ -1167,19 +1195,26 @@ class StreamingCodecDecoder(nn.Module):
                 x, rows, t_rows, c_out = self._trans_unfused(x, blk, rows, t_rows, slots, pos)
             for u in blk["units"]:
                 # Few rows: the fused unit has too few row tiles for the wider blocks (state layout is shared).
-                if self.res_unit and c_out in _RES_UNIT and (c_out == 96 or rows >= 8192):
+                if self.res_unit and c_out in _RES_UNIT and (c_out == 96 or (c_out == 192 and rows >= 8192)):
                     x = self._res_unit(x, u, t_rows, slots, pos)
                     self._mark(f"b{c_out}.d{u['conv1'].d}")
                     continue
-                if u.get("conv1_w4") is not None:
-                    s2 = self._snake(self._conv_cudnn(x, u, t_rows, slots, pos), u["act2"], u["b1"])
                 # Below ~16 frames per call the implicit GEMM has too few row tiles to win.
-                elif self.dilated_igemm and c_out in _DILATED_IGEMM and B * T >= 16:
+                big = B * T >= 16
+                if self.dilated_igemm and c_out in _DILATED_IGEMM and big and (self.igemm_d1 or u["conv1"].d > 1):
                     s2 = self._dilated_conv_snake(x, u, t_rows, slots, pos)
+                elif u.get("conv1_w4") is not None:
+                    s2 = self._snake(self._conv_cudnn(x, u, t_rows, slots, pos), u["act2"], u["b1"])
                 else:
                     col = self._im2col(x, u["conv1"], t_rows, slots, pos, bias=u["pb"], snake=u["act1"])
                     s2 = self._snake(torch.mm(col, u["conv1"].weight), u["act2"], u["b1"])
-                x.addmm_(s2, u["w2"])
+                if self.mm_res and c_out in _MM_RES and big:
+                    bm, bn, bk, warps, stages = _MM_RES[c_out]
+                    _mm_res_kernel[(triton.cdiv(rows, bm), triton.cdiv(c_out, bn))](
+                        s2, u["w2"], x, rows, C=c_out, BM=bm, BN=bn, BK=bk, num_warps=warps, num_stages=stages,
+                    )  # fmt: skip
+                else:
+                    x.addmm_(s2, u["w2"])
                 self._mark(f"b{c_out}.d{u['conv1'].d}")
 
         wav = torch.empty(B, t_rows, device=dev, dtype=torch.float32)
