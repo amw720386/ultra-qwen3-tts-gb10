@@ -31,7 +31,10 @@ class QW:
 
     def __init__(self, w: torch.Tensor, kind: str):
         assert w.dim() == 2 and w.is_cuda
+        hyb = kind == "hyb"  # FP8 for prefill / batches plus an FP4 copy for 1-2 row decode GEMVs
+        kind = "fp8" if hyb else kind
         self.kind = kind
+        self.data4 = self.scale4 = None
         self.N, self.K = w.shape
         self.bf16 = w.contiguous()
         wf = w.float()
@@ -52,6 +55,9 @@ class QW:
             self.scale = s.to(torch.bfloat16).contiguous()  # [N, K / 32]
         else:
             raise ValueError(kind)
+        if hyb:
+            f4 = QW(w, "fp4")
+            self.data4, self.scale4 = f4.data, f4.scale
 
     def dequant(self) -> torch.Tensor:
         if self.kind == "fp8":
@@ -197,6 +203,72 @@ def _(a, data, scale, N, K):
     return a.new_empty(a.shape[0], N)
 
 
+# ---- 1-2 row decode GEMVs (ultra-qwen3-tts): multiply-reduce on CUDA cores instead of tl.dot with the rows
+# padded to 16. Measured on GB10 (bench/gb10/gemv_micro.py) FP4 reaches ~190-260 GB/s at one row, so with half
+# the bytes it is 1.6-2.6x faster than the FP8 tensor-core kernel; slower from 4 rows on.
+GEMV_MAX_ROWS = int(os.environ.get("UQT_GEMV_MAX_ROWS", "2"))
+GEMV8 = os.environ.get("UQT_GEMV8", "1") == "1"  # FP8 weights also take the GEMV at 1-2 rows (~5-10%)
+_GEMV_CFG = [triton.Config({"BN": bn, "BK": bk}, num_warps=w)
+             for bn in (4, 8, 16, 32) for bk in (256, 512, 1024) for w in (2, 4, 8) if bn * bk <= 16384]
+
+
+@triton.autotune(configs=_GEMV_CFG, key=["N", "K", "M"], use_cuda_graph=True)
+@triton.jit
+def _gemv8_kernel(x_ptr, w_ptr, s_ptr, y_ptr, M, N, K: tl.constexpr, MP: tl.constexpr, BN: tl.constexpr,
+                  BK: tl.constexpr):
+    rn = tl.program_id(0) * BN + tl.arange(0, BN)
+    rk0 = tl.arange(0, BK)
+    for m in tl.static_range(MP):
+        if m < M:
+            acc = tl.zeros([BN], dtype=tl.float32)
+            for k0 in tl.static_range(0, K, BK):
+                x = tl.load(x_ptr + m * K + k0 + rk0).to(tl.float32)
+                w = tl.load(w_ptr + rn[:, None] * K + (k0 + rk0)[None, :]).to(tl.float32)
+                acc += tl.sum(w * x[None, :], axis=1)
+            tl.store(y_ptr + m * N + rn, (acc * tl.load(s_ptr + rn)).to(tl.bfloat16))
+
+
+@triton.autotune(configs=_GEMV_CFG, key=["N", "K", "M"], use_cuda_graph=True)
+@triton.jit
+def _gemv4_kernel(x_ptr, w_ptr, s_ptr, y_ptr, M, N, K: tl.constexpr, MP: tl.constexpr, BN: tl.constexpr,
+                  BK: tl.constexpr, G: tl.constexpr):
+    rn = tl.program_id(0) * BN + tl.arange(0, BN)
+    HB: tl.constexpr = BK // 2
+    NG: tl.constexpr = BK // G
+    rj = tl.arange(0, HB)
+    rg = tl.arange(0, NG)
+    for m in tl.static_range(MP):
+        if m < M:
+            acc = tl.zeros([BN], dtype=tl.float32)
+            for k0 in tl.static_range(0, K, BK):
+                p = tl.load(w_ptr + rn[:, None] * (K // 2) + (k0 // 2 + rj)[None, :])
+                xe = tl.load(x_ptr + m * K + k0 + 2 * rj).to(tl.float32)
+                xo = tl.load(x_ptr + m * K + k0 + 2 * rj + 1).to(tl.float32)
+                part = _e2m1(p & 0xF).to(tl.float32) * xe[None, :] + _e2m1(p >> 4).to(tl.float32) * xo[None, :]
+                sc = tl.load(s_ptr + rn[:, None] * (K // G) + (k0 // G + rg)[None, :]).to(tl.float32)
+                acc += tl.sum(tl.sum(tl.reshape(part, (BN, NG, G // 2)), axis=2) * sc, axis=1)
+            tl.store(y_ptr + m * N + rn, acc.to(tl.bfloat16))
+
+
+@torch.library.custom_op("uqt::wq_gemv", mutates_args=())
+def wq_gemv(a: torch.Tensor, data: torch.Tensor, scale: torch.Tensor, kind: int, N: int, K: int) -> torch.Tensor:
+    """a [M <= 2, K] bf16 -> [M, N] bf16. kind 0 = fp8, 1 = fp4."""
+    a = a.contiguous()
+    M = a.shape[0]
+    out = torch.empty(M, N, dtype=torch.bfloat16, device=a.device)
+    grid = lambda meta: (triton.cdiv(N, meta["BN"]),)  # noqa: E731
+    if kind == 0:
+        _gemv8_kernel[grid](a, data, scale, out, M, N, K=K, MP=2)
+    else:
+        _gemv4_kernel[grid](a, data, scale, out, M, N, K=K, MP=2, G=FP4_GROUP)
+    return out
+
+
+@wq_gemv.register_fake
+def _(a, data, scale, kind, N, K):
+    return a.new_empty(a.shape[0], N)
+
+
 @torch.library.custom_op("uqt::wq_mm", mutates_args=())
 def wq_mm(a: torch.Tensor, data: torch.Tensor, scale: torch.Tensor, kind: int, N: int, K: int) -> torch.Tensor:
     """a [M, K] bf16 -> [M, N] bf16. kind 0 = fp8, 1 = fp4."""
@@ -231,5 +303,10 @@ def lin(x: torch.Tensor, w) -> torch.Tensor:
         if FP8_BIG and w.kind == "fp8" and (m <= 192 or (w.N >= 8192 and m <= BIG_MAX_ROWS)):
             return fp8_mm_big(x2, w.data, w.scale, w.N, w.K).reshape(*lead, w.N)
         return torch.nn.functional.linear(x, w.bf16)
+    if x2.shape[0] <= GEMV_MAX_ROWS and w.K % 1024 == 0:
+        if w.data4 is not None:
+            return wq_gemv(x2, w.data4, w.scale4, 1, w.N, w.K).reshape(*lead, w.N)
+        if w.kind == "fp8" and GEMV8:
+            return wq_gemv(x2, w.data, w.scale, 0, w.N, w.K).reshape(*lead, w.N)
     out = wq_mm(x2, w.data, w.scale, 0 if w.kind == "fp8" else 1, w.N, w.K)
     return out.reshape(*lead, w.N)

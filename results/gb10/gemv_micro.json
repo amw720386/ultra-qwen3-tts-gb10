@@ -1,0 +1,498 @@
+{
+ "talker_qkv": {
+  "1": {
+   "prod_fp8_us": 38.8,
+   "gemv_fp8_us": 36.3,
+   "cfg8": [
+    4,
+    1024,
+    8
+   ],
+   "prod_fp4_us": 29.2,
+   "gemv_fp4_us": 21.9,
+   "cfg4": [
+    8,
+    1024,
+    8
+   ],
+   "gemv_fp8_GBps": 231,
+   "gemv_fp4_GBps": 192,
+   "err8": 0.0025,
+   "err4": 0.0021
+  },
+  "2": {
+   "prod_fp8_us": 39.0,
+   "gemv_fp8_us": 38.4,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 30.1,
+   "gemv_fp4_us": 30.1,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 218,
+   "gemv_fp4_GBps": 139,
+   "err8": 0.0025,
+   "err4": 0.0022
+  },
+  "4": {
+   "prod_fp8_us": 40.4,
+   "gemv_fp8_us": 45.1,
+   "cfg8": [
+    4,
+    512,
+    4
+   ],
+   "prod_fp4_us": 31.9,
+   "gemv_fp4_us": 50.6,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 186,
+   "gemv_fp4_GBps": 83,
+   "err8": 0.0024,
+   "err4": 0.0021
+  }
+ },
+ "talker_o": {
+  "1": {
+   "prod_fp8_us": 20.8,
+   "gemv_fp8_us": 18.1,
+   "cfg8": [
+    4,
+    1024,
+    8
+   ],
+   "prod_fp4_us": 16.7,
+   "gemv_fp4_us": 7.9,
+   "cfg4": [
+    8,
+    1024,
+    2
+   ],
+   "gemv_fp8_GBps": 232,
+   "gemv_fp4_GBps": 264,
+   "err8": 0.0023,
+   "err4": 0.0021
+  },
+  "2": {
+   "prod_fp8_us": 20.7,
+   "gemv_fp8_us": 19.6,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 17.2,
+   "gemv_fp4_us": 13.5,
+   "cfg4": [
+    16,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 214,
+   "gemv_fp4_GBps": 155,
+   "err8": 0.0023,
+   "err4": 0.0022
+  },
+  "4": {
+   "prod_fp8_us": 21.4,
+   "gemv_fp8_us": 23.4,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 18.8,
+   "gemv_fp4_us": 25.4,
+   "cfg4": [
+    16,
+    1024,
+    8
+   ],
+   "gemv_fp8_GBps": 179,
+   "gemv_fp4_GBps": 83,
+   "err8": 0.0024,
+   "err4": 0.0022
+  }
+ },
+ "talker_gu": {
+  "1": {
+   "prod_fp8_us": 115.4,
+   "gemv_fp8_us": 106.6,
+   "cfg8": [
+    4,
+    1024,
+    8
+   ],
+   "prod_fp4_us": 73.6,
+   "gemv_fp4_us": 61.1,
+   "cfg4": [
+    4,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 236,
+   "gemv_fp4_GBps": 206,
+   "err8": 0.0024,
+   "err4": 0.0022
+  },
+  "2": {
+   "prod_fp8_us": 112.2,
+   "gemv_fp8_us": 108.2,
+   "cfg8": [
+    8,
+    512,
+    8
+   ],
+   "prod_fp4_us": 75.1,
+   "gemv_fp4_us": 74.2,
+   "cfg4": [
+    4,
+    1024,
+    2
+   ],
+   "gemv_fp8_GBps": 233,
+   "gemv_fp4_GBps": 170,
+   "err8": 0.0024,
+   "err4": 0.0022
+  },
+  "4": {
+   "prod_fp8_us": 112.5,
+   "gemv_fp8_us": 116.4,
+   "cfg8": [
+    4,
+    512,
+    4
+   ],
+   "prod_fp4_us": 74.8,
+   "gemv_fp4_us": 132.6,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 216,
+   "gemv_fp4_GBps": 95,
+   "err8": 0.0024,
+   "err4": 0.0022
+  }
+ },
+ "talker_down": {
+  "1": {
+   "prod_fp8_us": 56.7,
+   "gemv_fp8_us": 54.7,
+   "cfg8": [
+    4,
+    1024,
+    8
+   ],
+   "prod_fp4_us": 59.5,
+   "gemv_fp4_us": 32.8,
+   "cfg4": [
+    8,
+    1024,
+    8
+   ],
+   "gemv_fp8_GBps": 230,
+   "gemv_fp4_GBps": 192,
+   "err8": 0.0025,
+   "err4": 0.0022
+  },
+  "2": {
+   "prod_fp8_us": 58.8,
+   "gemv_fp8_us": 60.9,
+   "cfg8": [
+    8,
+    512,
+    4
+   ],
+   "prod_fp4_us": 64.3,
+   "gemv_fp4_us": 49.3,
+   "cfg4": [
+    4,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 207,
+   "gemv_fp4_GBps": 127,
+   "err8": 0.0024,
+   "err4": 0.0021
+  },
+  "4": {
+   "prod_fp8_us": 58.7,
+   "gemv_fp8_us": 75.4,
+   "cfg8": [
+    8,
+    512,
+    4
+   ],
+   "prod_fp4_us": 63.6,
+   "gemv_fp4_us": 87.4,
+   "cfg4": [
+    4,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 167,
+   "gemv_fp4_GBps": 72,
+   "err8": 0.0024,
+   "err4": 0.0022
+  }
+ },
+ "cp_qkv": {
+  "1": {
+   "prod_fp8_us": 19.2,
+   "gemv_fp8_us": 16.4,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 11.7,
+   "gemv_fp4_us": 7.5,
+   "cfg4": [
+    8,
+    512,
+    2
+   ],
+   "gemv_fp8_GBps": 256,
+   "gemv_fp4_GBps": 281,
+   "err8": 0.0024,
+   "err4": 0.0021
+  },
+  "2": {
+   "prod_fp8_us": 18.6,
+   "gemv_fp8_us": 17.0,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 12.1,
+   "gemv_fp4_us": 13.3,
+   "cfg4": [
+    16,
+    512,
+    4
+   ],
+   "gemv_fp8_GBps": 246,
+   "gemv_fp4_GBps": 158,
+   "err8": 0.0024,
+   "err4": 0.0022
+  },
+  "4": {
+   "prod_fp8_us": 18.7,
+   "gemv_fp8_us": 20.6,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 13.7,
+   "gemv_fp4_us": 25.1,
+   "cfg4": [
+    8,
+    512,
+    2
+   ],
+   "gemv_fp8_GBps": 203,
+   "gemv_fp4_GBps": 83,
+   "err8": 0.0024,
+   "err4": 0.0021
+  }
+ },
+ "cp_o": {
+  "1": {
+   "prod_fp8_us": 8.2,
+   "gemv_fp8_us": 3.4,
+   "cfg8": [
+    4,
+    512,
+    4
+   ],
+   "prod_fp4_us": 12.8,
+   "gemv_fp4_us": 4.9,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 626,
+   "gemv_fp4_GBps": 216,
+   "err8": 0.0025,
+   "err4": 0.0021
+  },
+  "2": {
+   "prod_fp8_us": 8.3,
+   "gemv_fp8_us": 4.6,
+   "cfg8": [
+    8,
+    512,
+    4
+   ],
+   "prod_fp4_us": 13.1,
+   "gemv_fp4_us": 8.0,
+   "cfg4": [
+    4,
+    1024,
+    2
+   ],
+   "gemv_fp8_GBps": 454,
+   "gemv_fp4_GBps": 131,
+   "err8": 0.0024,
+   "err4": 0.002
+  },
+  "4": {
+   "prod_fp8_us": 8.2,
+   "gemv_fp8_us": 7.2,
+   "cfg8": [
+    8,
+    512,
+    4
+   ],
+   "prod_fp4_us": 13.8,
+   "gemv_fp4_us": 14.4,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 292,
+   "gemv_fp4_GBps": 73,
+   "err8": 0.0024,
+   "err4": 0.0021
+  }
+ },
+ "cp_gu": {
+  "1": {
+   "prod_fp8_us": 30.5,
+   "gemv_fp8_us": 27.8,
+   "cfg8": [
+    4,
+    1024,
+    8
+   ],
+   "prod_fp4_us": 20.4,
+   "gemv_fp4_us": 13.8,
+   "cfg4": [
+    4,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 227,
+   "gemv_fp4_GBps": 229,
+   "err8": 0.0025,
+   "err4": 0.0022
+  },
+  "2": {
+   "prod_fp8_us": 30.9,
+   "gemv_fp8_us": 28.9,
+   "cfg8": [
+    4,
+    512,
+    2
+   ],
+   "prod_fp4_us": 22.0,
+   "gemv_fp4_us": 21.8,
+   "cfg4": [
+    16,
+    512,
+    4
+   ],
+   "gemv_fp8_GBps": 218,
+   "gemv_fp4_GBps": 144,
+   "err8": 0.0024,
+   "err4": 0.0021
+  },
+  "4": {
+   "prod_fp8_us": 30.9,
+   "gemv_fp8_us": 32.3,
+   "cfg8": [
+    16,
+    512,
+    8
+   ],
+   "prod_fp4_us": 21.5,
+   "gemv_fp4_us": 37.3,
+   "cfg4": [
+    16,
+    512,
+    4
+   ],
+   "gemv_fp8_GBps": 195,
+   "gemv_fp4_GBps": 84,
+   "err8": 0.0025,
+   "err4": 0.0022
+  }
+ },
+ "cp_down": {
+  "1": {
+   "prod_fp8_us": 13.1,
+   "gemv_fp8_us": 9.0,
+   "cfg8": [
+    4,
+    512,
+    4
+   ],
+   "prod_fp4_us": 18.9,
+   "gemv_fp4_us": 6.4,
+   "cfg4": [
+    4,
+    1024,
+    2
+   ],
+   "gemv_fp8_GBps": 351,
+   "gemv_fp4_GBps": 245,
+   "err8": 0.0023,
+   "err4": 0.0021
+  },
+  "2": {
+   "prod_fp8_us": 13.7,
+   "gemv_fp8_us": 10.3,
+   "cfg8": [
+    4,
+    512,
+    4
+   ],
+   "prod_fp4_us": 19.6,
+   "gemv_fp4_us": 11.3,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 304,
+   "gemv_fp4_GBps": 139,
+   "err8": 0.0025,
+   "err4": 0.0021
+  },
+  "4": {
+   "prod_fp8_us": 13.3,
+   "gemv_fp8_us": 14.2,
+   "cfg8": [
+    4,
+    512,
+    4
+   ],
+   "prod_fp4_us": 19.6,
+   "gemv_fp4_us": 20.9,
+   "cfg4": [
+    8,
+    1024,
+    4
+   ],
+   "gemv_fp8_GBps": 221,
+   "gemv_fp4_GBps": 75,
+   "err8": 0.0024,
+   "err4": 0.0021
+  }
+ }
+}
