@@ -481,7 +481,9 @@ _PDL_CONFIGS: tuple[tuple[int, dict[str, tuple]], ...] = (
 
 def _pdl_supported(device: torch.device) -> bool:
     """Programmatic dependent launch (``gdc_wait``) needs Hopper or newer and a Triton that exposes it."""
-    if device.type != "cuda" or torch.cuda.get_device_capability(device)[0] < 9:
+    import os
+
+    if os.environ.get("UQT_NO_PDL") or device.type != "cuda" or torch.cuda.get_device_capability(device)[0] < 9:
         return False
     return hasattr(getattr(tl.extra, "cuda", None), "gdc_wait")
 
