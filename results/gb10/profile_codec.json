@@ -1,0 +1,310 @@
+{
+ "64x2": {
+  "graph_ms": 19.551881408691408,
+  "us_per_stream_frame": 152.7490735054016,
+  "gpu_ms_eager": 19.935811,
+  "top": [
+   [
+    "_im2col_kernel",
+    25,
+    4.968
+   ],
+   [
+    "_dilated_conv_snake_kernel",
+    6,
+    3.493
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bx_NNNN",
+    3,
+    1.923
+   ],
+   [
+    "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x128_64x3_nn_align8",
+    7,
+    1.861
+   ],
+   [
+    "void cutlass__5x_cudnn::Kernel<cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x128_32",
+    3,
+    1.527
+   ],
+   [
+    "_col2im_kernel",
+    4,
+    1.28
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x176x64_2_32x88x64_tmaAB_bz_NNNN",
+    2,
+    0.811
+   ],
+   [
+    "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_nn_align8",
+    4,
+    0.765
+   ],
+   [
+    "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x128_32x3_nn_align8",
+    3,
+    0.658
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_NNNN",
+    1,
+    0.593
+   ],
+   [
+    "_attend_kernel",
+    8,
+    0.436
+   ],
+   [
+    "sm80_xmma_fprop_implicit_gemm_bf16bf16_bf16f32_f32_nhwckrsc_nhwc_tilesize128x128x64_stage3",
+    1,
+    0.326
+   ],
+   [
+    "nvjet_sm121_tss_mma_64x144x64_3_32x144x64_tmaAB_bz_NNNN",
+    1,
+    0.225
+   ],
+   [
+    "nvjet_sm121_tst_mma_192x56x64_3_32x56x64_tmaAB_bz_NNNN",
+    8,
+    0.168
+   ]
+  ]
+ },
+ "256x2": {
+  "graph_ms": 80.35563354492187,
+  "us_per_stream_frame": 156.94459676742554,
+  "gpu_ms_eager": 81.61322199999998,
+  "top": [
+   [
+    "_im2col_kernel",
+    25,
+    21.495
+   ],
+   [
+    "_dilated_conv_snake_kernel",
+    6,
+    12.849
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_NNNN",
+    6,
+    10.121
+   ],
+   [
+    "nvjet_sm121_tst_mma_64x144x64_3_32x144x64_tmaAB_bx_NNNN",
+    3,
+    8.638
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bx_NNNN",
+    6,
+    8.476
+   ],
+   [
+    "_col2im_kernel",
+    4,
+    5.958
+   ],
+   [
+    "void cutlass__5x_cudnn::Kernel<cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x128_32",
+    3,
+    5.76
+   ],
+   [
+    "_attend_kernel",
+    8,
+    1.963
+   ],
+   [
+    "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_256x128_32x3_nn_align8",
+    22,
+    1.887
+   ],
+   [
+    "void cutlass__5x_cudnn::Kernel<cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x64_32x",
+    1,
+    1.377
+   ],
+   [
+    "nvjet_sm121_tss_mma_64x144x64_3_32x144x64_tmaAB_bz_NNNN",
+    1,
+    0.906
+   ],
+   [
+    "nvjet_sm121_tst_mma_256x128x64_2_64x64x64_tmaAB_bz_NNNN",
+    1,
+    0.581
+   ],
+   [
+    "_rope_kv_write_kernel",
+    8,
+    0.303
+   ],
+   [
+    "nvjet_sm121_tst_mma_64x104x64_4_16x104x64_tmaAB_bx_NNNN",
+    16,
+    0.245
+   ]
+  ]
+ },
+ "64x16": {
+  "graph_ms": 155.2306884765625,
+  "us_per_stream_frame": 151.59246921539307,
+  "gpu_ms_eager": 159.77515699999998,
+  "top": [
+   [
+    "_im2col_kernel",
+    25,
+    42.99
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bx_NNNN",
+    12,
+    27.987
+   ],
+   [
+    "_dilated_conv_snake_kernel",
+    6,
+    26.878
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_NNNN",
+    7,
+    21.512
+   ],
+   [
+    "void cutlass__5x_cudnn::Kernel<cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x128_32",
+    4,
+    13.392
+   ],
+   [
+    "_col2im_kernel",
+    4,
+    11.933
+   ],
+   [
+    "nvjet_sm121_tst_mma_64x144x64_3_32x144x64_tmaAB_bx_NNNN",
+    3,
+    7.768
+   ],
+   [
+    "nvjet_sm121_tss_mma_64x144x64_3_32x144x64_tmaAB_bz_NNNN",
+    2,
+    1.77
+   ],
+   [
+    "_attend_kernel",
+    8,
+    1.292
+   ],
+   [
+    "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_nn_align8",
+    10,
+    0.894
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x176x64_2_32x88x64_tmaAB_bx_NNNN",
+    2,
+    0.755
+   ],
+   [
+    "_conv_out_taps_kernel",
+    1,
+    0.469
+   ],
+   [
+    "_bias_gelu_kernel",
+    2,
+    0.389
+   ],
+   [
+    "_rope_kv_write_kernel",
+    8,
+    0.37
+   ]
+  ]
+ },
+ "128x8": {
+  "graph_ms": 155.22694091796876,
+  "us_per_stream_frame": 151.58880949020386,
+  "gpu_ms_eager": 158.150214,
+  "top": [
+   [
+    "_im2col_kernel",
+    25,
+    42.663
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bx_NNNN",
+    12,
+    27.533
+   ],
+   [
+    "_dilated_conv_snake_kernel",
+    6,
+    26.394
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_NNNN",
+    7,
+    20.479
+   ],
+   [
+    "void cutlass__5x_cudnn::Kernel<cutlass_tensorop_bf16_s16816fprop_optimized_bf16_128x128_32",
+    4,
+    13.606
+   ],
+   [
+    "_col2im_kernel",
+    4,
+    12.144
+   ],
+   [
+    "nvjet_sm121_tst_mma_64x144x64_3_32x144x64_tmaAB_bx_NNNN",
+    3,
+    7.846
+   ],
+   [
+    "nvjet_sm121_tss_mma_64x144x64_3_32x144x64_tmaAB_bz_NNNN",
+    2,
+    1.756
+   ],
+   [
+    "_attend_kernel",
+    8,
+    1.448
+   ],
+   [
+    "void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x256_32x3_nn_align8",
+    10,
+    0.902
+   ],
+   [
+    "nvjet_sm121_tst_mma_128x176x64_2_32x88x64_tmaAB_bx_NNNN",
+    2,
+    0.722
+   ],
+   [
+    "_conv_out_taps_kernel",
+    1,
+    0.478
+   ],
+   [
+    "_rope_kv_write_kernel",
+    8,
+    0.44
+   ],
+   [
+    "_bias_gelu_kernel",
+    2,
+    0.383
+   ]
+  ]
+ }
+}

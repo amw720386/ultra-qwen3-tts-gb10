@@ -210,6 +210,242 @@ def _dilated_conv_snake_kernel(
 
 
 @triton.jit
+def _res_unit_kernel(
+    x_ptr,  # [B * T, C] residual stream (pending bias pb not yet added)
+    hist_ptr,  # [2, S, H, C] transformed history rows
+    slots_ptr,
+    pos_ptr,
+    par_ptr,
+    pb_ptr,
+    a1_ptr,
+    ib1_ptr,
+    w1_ptr,  # [K * C, C] tap-major dilated conv
+    b1_ptr,
+    a2_ptr,
+    ib2_ptr,
+    w2_ptr,  # [C, C] 1x1 conv
+    out_ptr,  # [B * T, C] x + SnakeBeta(conv1(SnakeBeta(x + pb)) + b1) @ w2
+    T,
+    S,
+    rows,
+    C: tl.constexpr,
+    K: tl.constexpr,
+    D: tl.constexpr,
+    BM: tl.constexpr,
+    BC: tl.constexpr,
+):
+    """A whole decoder residual unit in one pass (ultra-qwen3-tts).
+
+    act1 (pending bias + SnakeBeta) is applied as the conv reads each source row,
+    from the history for rows before this call, so no transformed copy is written;
+    the conv1 bias + act2 epilogue feeds the 1x1 conv2 GEMM and the residual add in
+    registers. Width C = 3 * CS is held as three power-of-two column slices.
+    Roundings match the unfused path (act1 rows, conv1 output and act2 output to the
+    activation dtype; conv2 accumulates in fp32 with the residual).
+    """
+    H: tl.constexpr = (K - 1) * D
+    CS: tl.constexpr = C // 3
+    NC: tl.constexpr = C // BC
+    r = tl.program_id(0) * BM + tl.arange(0, BM)
+    rm = r < rows
+    rr = tl.where(rm, r, 0)
+    b = rr // T
+    t = rr % T
+    slot = tl.load(slots_ptr + b).to(tl.int64)
+    live = tl.load(pos_ptr + b) != 0
+    par = tl.load(par_ptr + slot).to(tl.int64)
+    hbase = (par * S + slot) * H
+    dt = out_ptr.dtype.element_ty
+    cs = tl.arange(0, CS)
+    cc = tl.arange(0, BC)
+    acc0 = tl.zeros([BM, CS], dtype=tl.float32)
+    acc1 = tl.zeros([BM, CS], dtype=tl.float32)
+    acc2 = tl.zeros([BM, CS], dtype=tl.float32)
+    for kidx in range(K * NC):
+        j = kidx // NC
+        c = (kidx % NC) * BC + cc
+        u = t + j * D
+        fh = u < H
+        hv = tl.load(
+            hist_ptr + (hbase + tl.where(fh, u, 0))[:, None] * C + c[None, :],
+            mask=(fh & live & rm)[:, None],
+            other=0.0,
+        )
+        xrow = tl.where(fh, 0, b * T + u - H).to(tl.int64)
+        xv = tl.load(x_ptr + xrow[:, None] * C + c[None, :], mask=((~fh) & rm)[:, None], other=0.0).to(tl.float32)
+        xv += tl.load(pb_ptr + c).to(tl.float32)[None, :]
+        xv = _snake(xv, tl.load(a1_ptr + c).to(tl.float32)[None, :], tl.load(ib1_ptr + c).to(tl.float32)[None, :])
+        a = tl.where(fh[:, None], hv, xv.to(dt))
+        wr = w1_ptr + (j * C + c)[:, None] * C + cs[None, :]
+        acc0 = tl.dot(a, tl.load(wr), acc0)
+        acc1 = tl.dot(a, tl.load(wr + CS), acc1)
+        acc2 = tl.dot(a, tl.load(wr + 2 * CS), acc2)
+    s0 = _snake(
+        acc0.to(dt).to(tl.float32) + tl.load(b1_ptr + cs).to(tl.float32)[None, :],
+        tl.load(a2_ptr + cs).to(tl.float32)[None, :], tl.load(ib2_ptr + cs).to(tl.float32)[None, :],
+    ).to(dt)
+    s1 = _snake(
+        acc1.to(dt).to(tl.float32) + tl.load(b1_ptr + CS + cs).to(tl.float32)[None, :],
+        tl.load(a2_ptr + CS + cs).to(tl.float32)[None, :], tl.load(ib2_ptr + CS + cs).to(tl.float32)[None, :],
+    ).to(dt)
+    s2 = _snake(
+        acc2.to(dt).to(tl.float32) + tl.load(b1_ptr + 2 * CS + cs).to(tl.float32)[None, :],
+        tl.load(a2_ptr + 2 * CS + cs).to(tl.float32)[None, :], tl.load(ib2_ptr + 2 * CS + cs).to(tl.float32)[None, :],
+    ).to(dt)
+    ro = rr.to(tl.int64)[:, None] * C
+    for n in tl.static_range(3):
+        wn = w2_ptr + cs[:, None] * C + n * CS + cs[None, :]
+        o = tl.dot(s0, tl.load(wn), tl.zeros([BM, CS], dtype=tl.float32))
+        o = tl.dot(s1, tl.load(wn + CS * C), o)
+        o = tl.dot(s2, tl.load(wn + 2 * CS * C), o)
+        xo = ro + n * CS + cs[None, :]
+        o += tl.load(x_ptr + xo, mask=rm[:, None], other=0.0).to(tl.float32)
+        tl.store(out_ptr + xo, o.to(dt), mask=rm[:, None])
+
+
+@triton.jit
+def _hist_snake_kernel(
+    x_ptr, hist_ptr, slots_ptr, pos_ptr, par_ptr, pb_ptr, a_ptr, ib_ptr, T, S,
+    C: tl.constexpr, H: tl.constexpr, HP: tl.constexpr, BC: tl.constexpr,
+):
+    """Next call's history: the last H rows of SnakeBeta(x + pb) over [history | x]."""
+    b = tl.program_id(0)
+    c = tl.program_id(1) * BC + tl.arange(0, BC)
+    i = tl.arange(0, HP)
+    im = i < H
+    slot = tl.load(slots_ptr + b).to(tl.int64)
+    live = tl.load(pos_ptr + b) != 0
+    par = tl.load(par_ptr + slot).to(tl.int64)
+    u = T + i
+    fh = u < H
+    hv = tl.load(
+        hist_ptr + ((par * S + slot) * H + tl.where(fh & im, u, 0))[:, None] * C + c[None, :],
+        mask=(fh & im & live)[:, None], other=0.0,
+    )
+    xrow = (b * T + tl.where(fh | ~im, 0, u - H)).to(tl.int64)
+    xv = tl.load(x_ptr + xrow[:, None] * C + c[None, :], mask=((~fh) & im)[:, None], other=0.0).to(tl.float32)
+    xv += tl.load(pb_ptr + c).to(tl.float32)[None, :]
+    xv = _snake(xv, tl.load(a_ptr + c).to(tl.float32)[None, :], tl.load(ib_ptr + c).to(tl.float32)[None, :])
+    v = tl.where(fh[:, None], hv, xv.to(hist_ptr.dtype.element_ty))
+    tl.store(hist_ptr + (((1 - par) * S + slot) * H + i)[:, None] * C + c[None, :], v, mask=im[:, None])
+
+
+@triton.jit
+def _trans_kernel(
+    x_ptr,  # [B * T, CI] block input stream (pending bias pb not yet added)
+    pb_ptr,
+    a_ptr,
+    ib_ptr,
+    sh_ptr,  # [2, S, 1, CI] previous call's last SnakeBeta(x + pb) row
+    slots_ptr,
+    pos_ptr,
+    par_ptr,
+    w_ptr,  # [CI, 2 * R * CO] taps of the transposed conv
+    b_ptr,  # [CO]
+    out_ptr,  # [B * T * R, CO]
+    T,
+    S,
+    rows,
+    CI: tl.constexpr,
+    CO: tl.constexpr,
+    R: tl.constexpr,
+    BM: tl.constexpr,
+    BN: tl.constexpr,
+    BK: tl.constexpr,
+    SNAKE: tl.constexpr = True,
+):
+    """Block entry SnakeBeta + overlapping transposed conv (kernel 2R, stride R) in one GEMM (ultra-qwen3-tts).
+
+    Output row t * R + j = s[t] @ W[:, j] + s[t - 1] @ W[:, R + j] + b with s = SnakeBeta(x + pb):
+    a K = 2 * CI GEMM per phase j, so neither s nor the 2R-wide product rows are written.
+    """
+    NK: tl.constexpr = CI // BK
+    NT: tl.constexpr = (CO + BN - 1) // BN
+    # 1-D grid, phase and column tile fastest: the R * NT programs sharing a row tile run together (L2 reuse).
+    pid = tl.program_id(0)
+    inner = pid % (R * NT)
+    r = (pid // (R * NT)) * BM + tl.arange(0, BM)
+    j = inner // NT
+    n = (inner % NT) * BN + tl.arange(0, BN)
+    nm = n < CO
+    rm = r < rows
+    rr = tl.where(rm, r, 0)
+    b = rr // T
+    first = (rr % T) == 0
+    slot = tl.load(slots_ptr + b).to(tl.int64)
+    live = tl.load(pos_ptr + b) != 0
+    par = tl.load(par_ptr + slot).to(tl.int64)
+    dt = out_ptr.dtype.element_ty
+    ck = tl.arange(0, BK)
+    acc = tl.zeros([BM, BN], dtype=tl.float32)
+    for kidx in range(2 * NK):
+        half = kidx // NK
+        c = (kidx % NK) * BK + ck
+        use_h = first & (half == 1)
+        src = tl.where(use_h, 0, rr - half).to(tl.int64)
+        xv = tl.load(x_ptr + src[:, None] * CI + c[None, :], mask=(rm & ~use_h)[:, None], other=0.0)
+        if SNAKE:
+            xv = xv.to(tl.float32) + tl.load(pb_ptr + c).to(tl.float32)[None, :]
+            xv = _snake(xv, tl.load(a_ptr + c).to(tl.float32)[None, :], tl.load(ib_ptr + c).to(tl.float32)[None, :])
+            xv = xv.to(dt)
+        hv = tl.load(sh_ptr + ((par * S + slot) * CI)[:, None] + c[None, :], mask=(use_h & live & rm)[:, None], other=0.0)
+        a = tl.where(use_h[:, None], hv, xv)
+        w = tl.load(w_ptr + c[:, None] * (2 * R * CO) + (j + half * R) * CO + n[None, :], mask=nm[None, :], other=0.0)
+        acc = tl.dot(a, w, acc)
+    y = acc + tl.load(b_ptr + n, mask=nm, other=0.0).to(tl.float32)[None, :]
+    tl.store(out_ptr + (rr.to(tl.int64) * R + j)[:, None] * CO + n[None, :], y.to(dt), mask=rm[:, None] & nm[None, :])
+
+
+@triton.jit
+def _conv_out_part_kernel(
+    x_ptr,  # [B * T, C] last stream (pending bias pb not yet added)
+    hist_ptr,  # [2, S, H, C] transformed history rows
+    slots_ptr,
+    pos_ptr,
+    par_ptr,
+    pb_ptr,
+    a_ptr,
+    ib_ptr,
+    w_ptr,  # [C, 16] column j = tap j weights (zero padded)
+    taps_ptr,  # [B * (H + T), KP] float32 per-row tap partials
+    T,
+    S,
+    C: tl.constexpr,
+    H: tl.constexpr,
+    KP: tl.constexpr,
+    BU: tl.constexpr,
+):
+    """Final SnakeBeta fused into the output conv's per-row tap GEMM (ultra-qwen3-tts): no transformed copy."""
+    CS: tl.constexpr = C // 3
+    b = tl.program_id(0)
+    u = tl.program_id(1) * BU + tl.arange(0, BU)
+    um = u < H + T
+    slot = tl.load(slots_ptr + b).to(tl.int64)
+    live = tl.load(pos_ptr + b) != 0
+    par = tl.load(par_ptr + slot).to(tl.int64)
+    fh = u < H
+    dt = hist_ptr.dtype.element_ty
+    cs = tl.arange(0, CS)
+    kk = tl.arange(0, 16)
+    acc = tl.zeros([BU, 16], dtype=tl.float32)
+    xrow = (b * T + tl.where(fh | ~um, 0, u - H)).to(tl.int64)
+    for i in tl.static_range(3):
+        c = i * CS + cs
+        hv = tl.load(
+            hist_ptr + ((par * S + slot) * H + tl.where(fh, u, 0))[:, None] * C + c[None, :],
+            mask=(fh & live & um)[:, None], other=0.0,
+        )
+        xv = tl.load(x_ptr + xrow[:, None] * C + c[None, :], mask=((~fh) & um)[:, None], other=0.0).to(tl.float32)
+        xv += tl.load(pb_ptr + c).to(tl.float32)[None, :]
+        xv = _snake(xv, tl.load(a_ptr + c).to(tl.float32)[None, :], tl.load(ib_ptr + c).to(tl.float32)[None, :])
+        a = tl.where(fh[:, None], hv, xv.to(dt))
+        acc = tl.dot(a, tl.load(w_ptr + c[:, None] * 16 + kk[None, :]), acc)
+    tl.store(
+        taps_ptr + (b * (H + T) + u).to(tl.int64)[:, None] * KP + kk[None, :], acc, mask=um[:, None] & (kk < KP)[None, :]
+    )
+
+
+@triton.jit
 def _rms_norm_kernel(x_ptr, w_ptr, out_ptr, eps, N: tl.constexpr):
     row = tl.program_id(0).to(tl.int64)
     offs = tl.arange(0, N)
@@ -514,6 +750,10 @@ def _snake_params(module) -> tuple[torch.Tensor, torch.Tensor]:
 # instead of a K-times patch matrix plus cuBLAS: the patch traffic dominates for
 # the long, narrow late blocks. The widest block is faster as patch + GEMM.
 _DILATED_IGEMM = {384: (128, 128, 64, 8), 192: (128, 64, 64, 4), 96: (128, 128, 32, 4)}
+# Fused residual unit (conv1 + act2 + conv2 + residual) tiles per width: (BM, BC, warps, stages).
+# Fused block entry (SnakeBeta + transposed conv) tiles per output width: (BM, BN, BK, warps, stages).
+_TRANS = {96: (64, 64, 32, 4, 2), 192: (128, 128, 32, 4, 2), 384: (128, 128, 32, 4, 2)}  # widest block: unfused is faster
+_RES_UNIT = {96: (64, 32, 4, 2), 192: (64, 32, 4, 2), 384: (32, 32, 8, 3)}
 
 
 class StreamingCodecDecoder(nn.Module):
@@ -646,6 +886,7 @@ class StreamingCodecDecoder(nn.Module):
                 w=cast(tw.permute(0, 2, 1).reshape(c_in, 2 * rate * c_out)),
                 b=cast(f32(trans.conv.bias)),
                 prev=torch.zeros(2, S, rate, c_out, device=dev, dtype=dtype),
+                shist=hist(1, c_in),
                 units=[],
             )
             pending = torch.zeros(c_out, device=dev, dtype=torch.float32)
@@ -685,10 +926,24 @@ class StreamingCodecDecoder(nn.Module):
         taps = torch.zeros(self.out_c, 8, device=dev, dtype=dtype)
         taps[:, :_KERNEL] = self.conv_out_w.t()
         self.conv_out_taps = taps
+        taps16 = torch.zeros(self.out_c, 16, device=dev, dtype=dtype)
+        taps16[:, :_KERNEL] = self.conv_out_w.t()
+        self.conv_out_taps16 = taps16
         self.conv_out_gemm = _CUDA_SIN and dtype == torch.bfloat16
         self.parity = torch.zeros(S, device=dev, dtype=torch.int32)
         self._dummy = torch.zeros(1, device=dev, dtype=dtype)
         self.dilated_igemm = _CUDA_SIN and dtype == torch.bfloat16
+        import os
+
+        self.res_unit = self.dilated_igemm and os.environ.get("UQT_RES_UNIT", "1") == "1"
+        self.fused_trans = self.dilated_igemm and os.environ.get("UQT_FUSED_TRANS", "1") == "1"
+        self.marks = None  # profiling: list of (name, cuda event) appended during forward
+
+    def _mark(self, name):
+        if self.marks is not None:
+            ev = torch.cuda.Event(enable_timing=True)
+            ev.record()
+            self.marks.append((name, ev))
 
     def _slot_state(self, slot: int) -> list[torch.Tensor]:
         state = [self.parity[slot : slot + 1]]
@@ -701,6 +956,7 @@ class StreamingCodecDecoder(nn.Module):
             state.append(up["hist"][:, slot])
         for block in self.blocks:
             state.append(block["prev"][:, slot])
+            state.append(block["shist"][:, slot])
             for unit in block["units"]:
                 state.append(unit["conv1"].hist[:, slot])
         return state
@@ -764,6 +1020,58 @@ class StreamingCodecDecoder(nn.Module):
         )  # fmt: skip
         return out
 
+    def _res_unit(self, x, u, T, slots, pos):
+        """One fused residual unit; returns the new stream (out of place) and advances its history."""
+        spec = u["conv1"]
+        rows, c = x.shape
+        bm, bc, warps, stages = _RES_UNIT[c]
+        out = torch.empty_like(x)
+        a1, ib1 = u["act1"]
+        a2, ib2 = u["act2"]
+        h = (spec.k - 1) * spec.d
+        B = slots.shape[0]
+        _hist_snake_kernel[(B, c // 32)](
+            x, spec.hist, slots, pos, self.parity, u["pb"], a1, ib1, T, self.num_slots,
+            C=c, H=h, HP=triton.next_power_of_2(h), BC=32,
+        )  # fmt: skip
+        _res_unit_kernel[(triton.cdiv(rows, bm),)](
+            x, spec.hist, slots, pos, self.parity, u["pb"], a1, ib1, spec.weight, u["b1"], a2, ib2, u["w2"], out,
+            T, self.num_slots, rows, C=c, K=spec.k, D=spec.d, BM=bm, BC=bc, num_warps=warps, num_stages=stages,
+        )  # fmt: skip
+        return out
+
+    def _trans_unfused(self, x, blk, rows, t_rows, slots, pos):
+        dev, dt = x.device, self.dtype
+        s = self._snake(x, blk["snake"], blk["pb"])
+        zt = torch.mm(s, blk["w"])  # [rows, 2 * rate * c_out]
+        r, c_out = blk["rate"], blk["c_out"]
+        x = torch.empty(rows * r, c_out, device=dev, dtype=dt)
+        bc = min(128, triton.next_power_of_2(c_out))
+        br = max(1, 2048 // bc)
+        _col2im_kernel[(triton.cdiv(rows, br), r, triton.cdiv(c_out, bc))](
+            zt, blk["b"], blk["prev"], slots, pos, self.parity, x, t_rows, self.num_slots, rows,
+            R=r, C=c_out, BR=br, BC=bc,
+        )  # fmt: skip
+        rows, t_rows = rows * r, t_rows * r
+        self._mark(f"b{c_out}.trans")
+        return x, rows, t_rows, c_out
+
+    def _trans(self, x, blk, T, slots, pos):
+        rows, ci = x.shape
+        r, co = blk["rate"], blk["c_out"]
+        bm, bn, bk, warps, stages = _TRANS[co] if rows >= 2048 else (32, 32, 32, 4, 2)
+        a, ib = blk["snake"]
+        B = slots.shape[0]
+        _hist_snake_kernel[(B, ci // 32)](
+            x, blk["shist"], slots, pos, self.parity, blk["pb"], a, ib, T, self.num_slots, C=ci, H=1, HP=1, BC=32,
+        )  # fmt: skip
+        out = torch.empty(rows * r, co, device=x.device, dtype=self.dtype)
+        _trans_kernel[(triton.cdiv(rows, bm) * r * triton.cdiv(co, bn),)](
+            x, blk["pb"], a, ib, blk["shist"], slots, pos, self.parity, blk["w"], blk["b"], out, T, self.num_slots, rows,
+            CI=ci, CO=co, R=r, BM=bm, BN=bn, BK=bk, num_warps=warps, num_stages=stages,
+        )  # fmt: skip
+        return out
+
     def _snake(self, x, snake, bias):
         n, c = x.shape
         out = torch.empty_like(x)
@@ -797,6 +1105,7 @@ class StreamingCodecDecoder(nn.Module):
         codes = codes.reshape(B * T, self.nq).to(torch.int32).contiguous()
         emb = torch.empty(B * T, 2 * self.half, device=dev, dtype=dt)
         _rvq_gather_kernel[(B * T,)](codes, self.books, emb, NQ=self.nq, CB=self.cb, HALF=self.half)
+        self._mark("start")
         x = torch.addmm(self.pre_b, self._im2col(emb, self.pre, T, slots, pos), self.pre.weight)
 
         hid, qd = self.hidden, self.heads * self.head_dim
@@ -826,6 +1135,7 @@ class StreamingCodecDecoder(nn.Module):
             x.addmm_(a, L["down"])
         _rms_norm_kernel[(rows,)](x, self.norm_w, h, self.eps, N=hid)
         y = torch.addmm(self.out_b, h, self.out_w)  # [rows, latent]
+        self._mark("transformer")
 
         t_rows = T
         for U in self.ups:
@@ -843,20 +1153,24 @@ class StreamingCodecDecoder(nn.Module):
             z.addmm_(p1, U["pw2"])
             y = z
 
+        self._mark("upsample")
         x = torch.mm(self._im2col(y, self.conv_in, t_rows, slots, pos, bias=self.conv_in_pb), self.conv_in.weight)
+        self._mark("conv_in")
         for blk in self.blocks:
-            s = self._snake(x, blk["snake"], blk["pb"])
-            zt = torch.mm(s, blk["w"])  # [rows, 2 * rate * c_out]
-            r, c_out = blk["rate"], blk["c_out"]
-            x = torch.empty(rows * r, c_out, device=dev, dtype=dt)
-            bc = min(128, triton.next_power_of_2(c_out))
-            br = max(1, 2048 // bc)
-            _col2im_kernel[(triton.cdiv(rows, br), r, triton.cdiv(c_out, bc))](
-                zt, blk["b"], blk["prev"], slots, pos, self.parity, x, t_rows, self.num_slots, rows,
-                R=r, C=c_out, BR=br, BC=bc,
-            )  # fmt: skip
-            rows, t_rows = rows * r, t_rows * r
+            if self.fused_trans and blk["c_out"] in _TRANS:
+                x = self._trans(x, blk, t_rows, slots, pos)
+                r = blk["rate"]
+                rows, t_rows = rows * r, t_rows * r
+                c_out = blk["c_out"]
+                self._mark(f"b{c_out}.trans")
+            else:
+                x, rows, t_rows, c_out = self._trans_unfused(x, blk, rows, t_rows, slots, pos)
             for u in blk["units"]:
+                # Few rows: the fused unit has too few row tiles for the wider blocks (state layout is shared).
+                if self.res_unit and c_out in _RES_UNIT and (c_out == 96 or rows >= 8192):
+                    x = self._res_unit(x, u, t_rows, slots, pos)
+                    self._mark(f"b{c_out}.d{u['conv1'].d}")
+                    continue
                 if u.get("conv1_w4") is not None:
                     s2 = self._snake(self._conv_cudnn(x, u, t_rows, slots, pos), u["act2"], u["b1"])
                 # Below ~16 frames per call the implicit GEMM has too few row tiles to win.
@@ -866,9 +1180,28 @@ class StreamingCodecDecoder(nn.Module):
                     col = self._im2col(x, u["conv1"], t_rows, slots, pos, bias=u["pb"], snake=u["act1"])
                     s2 = self._snake(torch.mm(col, u["conv1"].weight), u["act2"], u["b1"])
                 x.addmm_(s2, u["w2"])
+                self._mark(f"b{c_out}.d{u['conv1'].d}")
 
-        ext = self._im2col(x, self.conv_out, t_rows, slots, pos, bias=self.out_pb, snake=self.out_snake, ext=True)
         wav = torch.empty(B, t_rows, device=dev, dtype=torch.float32)
+        if self.fused_trans and self.out_c == 96:
+            h = _KERNEL - 1
+            a, ib = self.out_snake
+            _hist_snake_kernel[(B, self.out_c // 32)](
+                x, self.conv_out.hist, slots, pos, self.parity, self.out_pb, a, ib, t_rows, self.num_slots,
+                C=self.out_c, H=h, HP=8, BC=32,
+            )  # fmt: skip
+            taps = torch.empty(B * (t_rows + h), 8, device=dev, dtype=torch.float32)
+            _conv_out_part_kernel[(B, triton.cdiv(t_rows + h, 128))](
+                x, self.conv_out.hist, slots, pos, self.parity, self.out_pb, a, ib, self.conv_out_taps16, taps,
+                t_rows, self.num_slots, C=self.out_c, H=h, KP=8, BU=128, num_warps=4,
+            )  # fmt: skip
+            _conv_out_taps_kernel[(B, triton.cdiv(t_rows, 1024))](
+                taps, self.conv_out_b, wav, t_rows, K=_KERNEL, KP=8, BT=1024,
+            )  # fmt: skip
+            _flip_kernel[(B,)](self.parity, slots)
+            self._mark("conv_out")
+            return wav
+        ext = self._im2col(x, self.conv_out, t_rows, slots, pos, bias=self.out_pb, snake=self.out_snake, ext=True)
         if self.conv_out_gemm:
             taps = torch.mm(ext, self.conv_out_taps, out_dtype=torch.float32)
             _conv_out_taps_kernel[(B, triton.cdiv(t_rows, 1024))](
@@ -880,6 +1213,7 @@ class StreamingCodecDecoder(nn.Module):
                 C=self.out_c, K=_KERNEL, BT=256, CP=triton.next_power_of_2(self.out_c),
             )  # fmt: skip
         _flip_kernel[(B,)](self.parity, slots)
+        self._mark("conv_out")
         return wav
 
 
