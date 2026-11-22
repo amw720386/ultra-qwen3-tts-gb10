@@ -18,6 +18,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import os
+
 import torch
 import torch.nn.functional as F
 
@@ -236,7 +238,8 @@ class Engine:
         if fused_cp and dt == torch.bfloat16:
             from uqt.fused_cp import FusedCodePredictor
             self.fcp = FusedCodePredictor(cp, max_batch=1)
-            if weights != "bf16":
+            # UQT_CP_BF16=1 keeps the code predictor in bf16 so it can use the PDL-chained path
+            if weights != "bf16" and os.environ.get("UQT_CP_BF16", "0") != "1":
                 self.fcp.quantize(weights)
             self.fcodes = torch.zeros(1, self.n_groups, dtype=torch.long, device=dev)
             self.fcp_u = torch.empty(1, self.n_groups - 1, cpc.vocab_size, device=dev, dtype=torch.float32)
