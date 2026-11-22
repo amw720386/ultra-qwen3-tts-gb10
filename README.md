@@ -76,21 +76,46 @@ Single stream:
 Accuracy (300 clips, Whisper large-v3 WER, excluding catastrophic failures): bf16 2.82%, FP8 1.70%.
 The difference is within seed noise: FP8 loses no accuracy.
 
-Batched throughput (audio seconds generated per second):
+Batched engine throughput (audio seconds generated per second, engine only):
 
-| Streams | 1 | 8 | 32 | 64 | 128 | 256 |
-|---|---|---|---|---|---|---|
-| bf16 | 2.7 | 21.9 | 73.4 | 114.5 | 157.9 | 193.0 |
-| FP8 + batched attention + fused codec | **5.5** | **41.2** | **128.0** | **189.7** | **231.5** | **271.7** |
+| Streams | 1 | 8 | 32 | 64 | 128 | 160 | 192 | 256 |
+|---|---|---|---|---|---|---|---|---|
+| bf16 | 2.7 | 21.9 | 73.4 | 114.5 | 157.9 | - | - | 193.0 |
+| FP8 + batched attention + fused codec + large-batch FP8 GEMMs | **5.4** | **40.8** | **126.3** | **197.0** | **233.4** | **273.7** | **289.9** | **289.9** |
 
-With FP8, batched attention and the fused codec, all 256 concurrent streams run in real time.
+N streams in real time need N audio-s/s, so every configuration above runs all its streams faster
+than real time, including 256 (289.9 audio-s/s).
+
+Accuracy of the batched serving path: all 300 texts through the batched engine at 256 slots
+(FP8, large-batch FP8 GEMMs, fused codec) give 1.89% WER excluding one catastrophic failure, at
+parity with the single-stream runs above.
 
 Codec decoder time per stream-frame at 256 streams x 2 frames: **157 us -> 99 us** with the fused
 kernels. Against an fp32 decode, the waveform is about 28 dB SNR for both the old and the fused
 paths (the fused path equal or slightly closer).
 
-Head-to-head numbers against vLLM-Omni and sglang-omni on GB10 are pending
-(`bench/gb10/h2h_local.py`).
+### Head-to-head on GB10
+
+Streaming HTTP (`/v1/audio/speech`, raw PCM), CustomVoice, voice Ryan, measured on the box with the
+same multi-process client (`bench/gb10/h2h_local.py`), one server at a time. Each client sends
+requests back to back. Throughput in audio-s/s; TTFA = time to first audio byte, voiced = time to
+the first non-silent audio (p50, ms).
+
+| Clients | uqt (engine process + Go gateway, FP8) | vLLM-Omni 0.32 (2-stage default) | sglang-omni 0.2 |
+|---|---|---|---|
+| 1 | **5.4** / 41 / 41 | 2.4 / 60 / 858 | 2.6 / 78 / 78 |
+| 8 | **26.7** / 106 / 106 | 13.1 / 109 / 1035 | 17.1 / 106 / 106 |
+| 32 | **69.8** / 161 / 161 | 27.2 / 162 / 1857 | 39.3 / 93 / 195 |
+| 64 | **99.3** / 216 / 216 | 36.0 / 261 / 3154 | 61.5 / 103 / 248 |
+| 128 | **124.9** / 351 / 352 | 40.8 / 10090 / 13124 | 69.3 / 5280 / 5410 (15 of 384 failed) |
+| 256 | **166.9** / 556 / 558 | 41.7 / 31965 / 34979 | 72.2 / 5030 / 5158 (410 of 768 failed) |
+
+Cells: throughput / TTFA p50 / voiced TTFA p50. uqt completed every request at every load.
+Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
+for an sglang-omni Triton kernel that exceeds GB10's 99 KiB shared memory) are in
+`bench/gb10/competitors/`. vLLM-Omni's fused single-GPU profile does not start on GB10 (a Triton
+kernel in its MTP graph capture needs 136 KiB of shared memory), so the default 2-stage profile is
+the one measured.
 
 ## Layout
 
