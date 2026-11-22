@@ -8,6 +8,8 @@
   candidate set can exceed k only when logits tie exactly.
   Bisection/Gumbel approach follows vLLM-Omni's `_cp_sample_kernel` (Apache-2.0).
 """
+import os
+
 import torch
 import triton
 import triton.language as tl
@@ -84,10 +86,31 @@ def _(logits, u, inv_temp, top_k):
 def kv_write_rows(kc: torch.Tensor, vc: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
                   pos: torch.Tensor, layer: int) -> None:
     """kc/vc [L, S, n_kv, T, D]; k/v [B, n_kv, D]; pos [B] long. Row b writes slot b at pos[b]."""
-    B = k.shape[0]
+    B, H, D = k.shape
+    if _KV_TRITON and k.is_contiguous() and v.is_contiguous() and kc.is_contiguous() and vc.is_contiguous():
+        L, S, _, T, _ = kc.shape
+        _kv_write_rows_kernel[(B, H)](kc, vc, k, v, pos, layer, S, T, H=H, D=D, num_warps=1)
+        return
     rows = torch.arange(B, device=k.device)
     kc[layer][rows, :, pos] = k
     vc[layer][rows, :, pos] = v
+
+
+_KV_TRITON = os.environ.get("UQT_KV_TRITON", "1") == "1"
+
+
+@triton.jit
+def _kv_write_rows_kernel(kc_ptr, vc_ptr, k_ptr, v_ptr, pos_ptr, layer, S, T, H: tl.constexpr, D: tl.constexpr):
+    """One launch for both caches (ultra-qwen3-tts): row b, kv head h -> cache[layer, b, h, pos[b], :]."""
+    b = tl.program_id(0)
+    h = tl.program_id(1)
+    d = tl.arange(0, D)
+    p = tl.load(pos_ptr + b).to(tl.int64)
+    lb = (layer * S + b).to(tl.int64)  # cache is > 2^31 elements: index in int64
+    dst = ((lb * H + h) * T + p) * D + d
+    src = (b * H + h) * D + d
+    tl.store(kc_ptr + dst, tl.load(k_ptr + src))
+    tl.store(vc_ptr + dst, tl.load(v_ptr + src))
 
 
 @kv_write_rows.register_fake
