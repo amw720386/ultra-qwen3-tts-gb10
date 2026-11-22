@@ -81,11 +81,17 @@ def _e2m1(v):
     return bits.to(tl.int16).to(tl.bfloat16, bitcast=True)
 
 
+# Small-M decode GEMMs are a few microseconds of device time, below the launch overhead, so configs are
+# be benchmarked inside CUDA graphs with narrow tiles (UQT_WQ_GRAPH_TUNE=1); measured no end-to-end gain.
+_GRAPH_TUNE = os.environ.get("UQT_WQ_GRAPH_TUNE", "0") == "1"  # measured: -4% GEMM time, no end-to-end change
 _CFG = [triton.Config({"BN": bn, "BK": bk}, num_warps=w, num_stages=st)
+        for bn in (16, 32, 64) for bk in (128, 256, 512) for w in (2, 4) for st in (2, 3, 4)
+        if bn * bk <= 16384] if _GRAPH_TUNE else [
+        triton.Config({"BN": bn, "BK": bk}, num_warps=w, num_stages=st)
         for bn in (32, 64) for bk in (128, 256) for w in (4,) for st in (3, 4)]
 
 
-@triton.autotune(configs=_CFG, key=["MB", "N", "K"])
+@triton.autotune(configs=_CFG, key=["MB", "N", "K"], use_cuda_graph=_GRAPH_TUNE)
 @triton.jit
 def _fp8_mm_kernel(a_ptr, w_ptr, s_ptr, c_ptr, M, N, K, stride_am, stride_cm, MB,
                    BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr):
@@ -105,10 +111,13 @@ def _fp8_mm_kernel(a_ptr, w_ptr, s_ptr, c_ptr, M, N, K, stride_am, stride_cm, MB
 
 
 _CFG4 = [triton.Config({"BN": bn, "BK": bk}, num_warps=w, num_stages=st)
+         for bn in (16, 32, 64, 128) for bk in (128, 256, 512) for w in (2, 4, 8) for st in (2, 3, 4)
+         if bn * bk <= 32768] if _GRAPH_TUNE else [
+         triton.Config({"BN": bn, "BK": bk}, num_warps=w, num_stages=st)
          for bn in (32, 64, 128) for bk in (128, 256) for w in (4, 8) for st in (3, 4)]
 
 
-@triton.autotune(configs=_CFG4, key=["MB", "N", "K"])
+@triton.autotune(configs=_CFG4, key=["MB", "N", "K"], use_cuda_graph=_GRAPH_TUNE)
 @triton.jit
 def _fp4_mm_kernel(a_ptr, w_ptr, s_ptr, c_ptr, M, N, K, stride_am, stride_cm, MB,
                    BM: tl.constexpr, BN: tl.constexpr, BK: tl.constexpr, G: tl.constexpr):
