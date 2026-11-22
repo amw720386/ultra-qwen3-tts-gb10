@@ -113,6 +113,10 @@ def selfwarm(eng, be, waves=(1, 16, 64, 256, 512), K=2, max_frames=120):
     print(f"[uqt.engine_proc] self-warm {waves} in {time.perf_counter() - t0:.0f}s", flush=True)
 
 
+K_HIGH = int(os.environ.get("UQT_K_HIGH", "0"))  # frames per step once K_HIGH_AT streams are active (0: off)
+K_HIGH_AT = int(os.environ.get("UQT_K_HIGH_AT", "96"))
+
+
 def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True):
     import torch
 
@@ -166,8 +170,10 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                         it["valid"] = it["dec"]
             # generation (collect step i, launch step i+1 before decoding)
             if handle is not None or be.active():
-                be.collect(handle) if handle is not None else be.generate(K)
-                handle = be.launch(K) if be.active() else None
+                # under load, more frames per step: fewer host round trips and decode calls per second of audio
+                kc = K_HIGH if (K_HIGH and len(be.active()) >= K_HIGH_AT) else K
+                be.collect(handle) if handle is not None else be.generate(kc)
+                handle = be.launch(kc) if be.active() else None
             frames = []
             if fast is not None:
                 slot, p, mf, meta = fast
@@ -243,7 +249,7 @@ def main():
     with torch.inference_mode():
         eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
         be = BatchEngine(eng, max_slots=args.max_slots, max_len=args.max_len)
-        be.warmup(Ks=(2,))
+        be.warmup(Ks=(2, K_HIGH) if K_HIGH else (2,))
         wp = eng.build_prompt("custom", text="Warming up the fast lane for new requests.", language="English",
                               speaker="Ryan")
         eng.warmup(wp, Ks=(2,), max_bucket=min(1024, args.max_len), prefill_max=512)
