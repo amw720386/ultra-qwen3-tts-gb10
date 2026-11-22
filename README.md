@@ -1,5 +1,7 @@
 # ultra-qwen3-tts-multistream
 
+> Frozen at `v1.0.0` (H100). GB10 work continues in `ultra-qwen3-tts-gb10`.
+
 Goal: the most concurrent real-time Qwen3-TTS-12Hz-1.7B streams on a single NVIDIA H100, with
 accuracy at parity with the reference implementation. The single-stream (one GPU per voice) engine
 lives in the sibling repository `ultra-qwen3-tts`; this repository shares its kernels and adds a
@@ -88,42 +90,44 @@ LibriSpeech texts for latency, 300 for load; CustomVoice, speaker Ryan). Competi
 fastest documented configuration: vLLM-Omni 0.32.0 `qwen3_tts_fused_single_gpu.yaml` +
 `talker_stream_first_audio` (best of 4 documented profiles, 128 slots), sglang-omni @777c17f with the
 CuTeDSL sm90 backend and stateful codec (CI CustomVoice preset, 64 running requests). uqt runs as a
-GPU engine process (`uqt/engine_proc.py`) behind a Go gateway (`gateway/`), 512 slots, growing decode
-chunks (2, 4, 8, 16 frames). Scripts: `bench/h2h/{vllm_omni,sglang_omni,uqt_go_h2h}.py`.
+GPU engine process (`uqt/engine_proc.py`) behind a Go gateway (`gateway/`): 512 slots, decode chunks
+of 2, 2, 4, 8, 16 frames, first chunks delivered immediately, and a fast lane (prefill and first
+frames on the single-stream engine, concurrent with the batched step) while at most 8 streams are
+active. Scripts: `bench/h2h/{vllm_omni,sglang_omni,uqt_go_h2h}.py`.
 
 Methodology note: a single asyncio/httpx client process saturates at about 200 audio-seconds per
 second of streamed PCM (verified against a synthetic Go server with no engine: header delays of
 5-9 s at 256 connections). Earlier high-concurrency numbers in this repository were partly
-client-limited for every system. The load generator now spreads clients over up to 16 processes
-(about 32 connections each); against the synthetic server it sustains 1,729 audio-s/s at 512
-connections with the scripted per-stream timing.
+client-limited for every system. The load generator spreads clients over up to 16 processes (about
+32 connections each); against the synthetic server it sustains 1,729 audio-s/s at 512 connections.
 
 Single stream (sequential requests):
 
 | System | TTFA p50 | TTFA voiced p50 | RTF p50 | Playback gap after first chunk |
 |---|---|---|---|---|
-| uqt single-stream engine (Python server) | **9.0 ms** | **16.2 ms** | **0.046** | none |
-| uqt batched engine + Go gateway | 22.5 ms | 22.5 ms | 0.051 | none |
+| uqt single-stream engine (Python server) | **9.0 ms** | 16.2 ms | **0.046** | none |
+| uqt batched engine + Go gateway (fast lane) | 12.8 ms | **12.8 ms** | 0.050 | none |
 | vLLM-Omni 0.32 (fused) | 16.3 ms | 120 ms | 0.053 | ~20-25 ms on every stream |
 | sglang-omni (CuTeDSL) | 20.0 ms | 20.0 ms | 0.047 | none |
 
-Back-to-back clients (audio seconds per second / TTFA p50 / voiced TTFA p50):
+Back-to-back clients (audio seconds per second / TTFA p50 / voiced TTFA p50). Rows 8-64 for uqt and
+vLLM-Omni use 16 requests per client (longer, lower-variance runs); other rows use 4.
 
 | Clients | uqt (engine process + Go gateway) | vLLM-Omni 0.32 (fused) | sglang-omni (CuTeDSL) |
 |---|---|---|---|
-| 1 | 18 / 23 ms / 23 ms | 18 / 16 ms / 120 ms | 20 / 20 ms / 20 ms |
-| 8 | 88 / 33 ms / 33 ms | 90 / 20 ms / 145 ms | 89 / 26 ms / 26 ms |
-| 32 | 215 / 61 ms / 61 ms | **245** / 25 ms / 207 ms | 201 / 29 ms / 43 ms |
-| 64 | 366 / 80 ms / 80 ms | 369 / 35 ms / 297 ms | 270 / 32 ms / 62 ms |
-| 128 | **546** / 104 ms / 104 ms | 513 / 55 ms / 438 ms | 277 / 1.5 s (queue) |
-| 256 | **734** / 160 ms / 160 ms | 608 / 1.4 s / 1.8 s (queue) | 278 / 4.7 s (queue) |
-| 384 | **894** / 209 ms / 209 ms | 577 / 3.0 s / 3.4 s (queue) | - |
-| 512 | **965** / 257 ms / 258 ms | 649 / 3.9 s / 4.3 s (queue) | - |
+| 1 | 19 / 13 ms / 13 ms | 18 / 16 ms / 120 ms | 20 / 20 ms / 20 ms |
+| 8 | 95 / 29 ms / 29 ms | **112** / 19 ms / 142 ms | 89 / 26 ms / 26 ms |
+| 32 | 272 / 46 ms / 46 ms | **291** / 27 ms / 218 ms | 201 / 29 ms / 43 ms |
+| 64 | 408 / 60 ms / 60 ms | **449** / 34 ms / 288 ms | 270 / 32 ms / 62 ms |
+| 128 | **575** / 77 ms / 77 ms | 513 / 55 ms / 438 ms | 277 / 1.5 s (queue) |
+| 256 | **725** / 119 ms / 119 ms | 608 / 1.4 s / 1.8 s (queue) | 278 / 4.7 s (queue) |
+| 512 | **943** / 193 ms / 193 ms | 649 / 3.9 s / 4.3 s (queue) | - |
 
 uqt has no underruns at any level; vLLM-Omni's streams almost all have a ~20 ms playback gap after
-a near-silent first chunk, so its first-byte TTFA is not first audible audio. Below 128 clients
-vLLM-Omni delivers its first bytes sooner and matches or slightly exceeds uqt throughput; from 128
-clients up uqt delivers more audio (up to +49% at 512 clients) without queueing.
+a near-silent first chunk, so its first-byte TTFA is not first audible audio. Between 8 and 64
+clients vLLM-Omni delivers 7-18% more audio per second; from 128 clients up uqt delivers more
+(+12% at 128, +45% at 512) without queueing, and uqt's first audible audio arrives first at every
+level.
 
 WER on the 60 latency utterances (Whisper large-v3): uqt 2.07-2.80%, vLLM-Omni 1.89%, sglang-omni
 1.62%; differences of this size on 60 utterances are within sampling noise (see the 300 x 2-seed
