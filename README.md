@@ -140,6 +140,9 @@ the first non-silent audio (p50, ms).
 | 256 | **166.9** / 556 / 558 | 41.7 / 31965 / 34979 | 72.2 / 5030 / 5158 (410 of 768 failed) |
 
 Cells: throughput / TTFA p50 / voiced TTFA p50. uqt completed every request at every load.
+With hybrid FP8 + FP4 weights (now the server default) uqt measures 8.0 / 32 / 32 at 1 client and
+27.6 / 91 / 91 at 8 clients; 32-256 clients are within run-to-run spread of the FP8 row
+(`results/gb10/h2h-uqt-hyb.json`).
 Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
 for an sglang-omni Triton kernel that exceeds GB10's 99 KiB shared memory) are in
 `bench/gb10/competitors/`. vLLM-Omni's fused single-GPU profile does not start on GB10 (a Triton

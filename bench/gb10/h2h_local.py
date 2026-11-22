@@ -20,7 +20,7 @@ def main():
     ap.add_argument("--system", default="uqt")
     ap.add_argument("--url", default="http://127.0.0.1:8091/v1/audio/speech")
     ap.add_argument("--health", default="")
-    ap.add_argument("--weights", default="fp8")
+    ap.add_argument("--weights", default="hyb")
     ap.add_argument("--max-slots", type=int, default=256)
     ap.add_argument("--concs", default="1,8,32,64,128,256")
     ap.add_argument("--reqs", type=int, default=3)

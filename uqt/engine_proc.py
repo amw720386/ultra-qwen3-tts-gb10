@@ -253,7 +253,7 @@ def main():
     ap.add_argument("--variant", default="CustomVoice")
     ap.add_argument("--max-slots", type=int, default=512)
     ap.add_argument("--max-len", type=int, default=512)
-    ap.add_argument("--weights", default=os.environ.get("UQT_WEIGHTS", "bf16"))
+    ap.add_argument("--weights", default=os.environ.get("UQT_WEIGHTS", "hyb"))
     args = ap.parse_args()
 
     import torch
