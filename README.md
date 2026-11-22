@@ -68,6 +68,12 @@ than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8
   row-tile-fastest grid (each weight tile read from DRAM about once) is used where it measured
   faster: every shape up to 192 rows, the widest projections up to 320 (+19-21% engine throughput at
   160-192 streams). Prefill-sized calls use bf16 weights.
+- **Hybrid FP8 + FP4 weights with 1-2 row GEMVs** (`--weights hyb`): every linear keeps an FP8 copy
+  (prefill, batches) and an FP4 copy (e2m1, bf16 scale per 32). With one or two rows, as in
+  single-stream decode, a multiply-reduce GEMV on CUDA cores reads the FP4 copy at ~190-260 GB/s
+  instead of padding the row to 16 for tensor cores: single-stream generation 13.7 -> 9.25 ms/frame.
+  A persistent megakernel for the code predictor was measured first and gave nothing: CUDA-graph
+  replayed GEMVs already stream weights at the bandwidth limit (`results/gb10/mega_micro.json`).
 - **Batched live-length decode attention** (`kernels.bdec_attn`): one kernel attends every active
   stream over only its own live KV length instead of padding to the longest stream in the batch.
 - **Fused streaming codec kernels** (`uqt/streaming_codec.py`), on the stateful, frame-exact
@@ -92,9 +98,11 @@ Single stream:
 |---|---|---|---|
 | Stock reference implementation | - | 0.72 | - |
 | uqt, bf16 | 28.3 | 0.38 | 47 ms |
-| uqt, FP8 weights | **13.6** | **0.18** | **25 ms** |
+| uqt, FP8 weights | 13.6 | 0.18 | 25 ms |
+| uqt, hybrid FP8 + FP4 weights (`--weights hyb`) | **9.25** | **0.127** | **20.6 ms** |
 
-Accuracy (300 clips, Whisper large-v3 WER, excluding catastrophic failures): bf16 2.82%, FP8 1.70%.
+Accuracy (300 clips, Whisper large-v3 WER, excluding catastrophic failures): bf16 2.82%, FP8 1.70%,
+hybrid FP8 + FP4 2.05% (one catastrophic failure in each of FP8 and hybrid).
 The difference is within seed noise: FP8 loses no accuracy.
 
 Batched engine throughput (audio seconds generated per second, engine only):
