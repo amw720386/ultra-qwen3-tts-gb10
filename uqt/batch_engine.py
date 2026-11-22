@@ -307,6 +307,60 @@ class BatchEngine:
                 R = self._prime(slot, p.ref_codes)
             self.info[slot] = dict(pos=T, frames=0, dec_pos=R, max_frames=max_frames, done=False, meta=meta,
                                   valid=0, dec=0, ci=0)
+        self._e_ev = torch.cuda.Event()
+        self._e_ev.record()
+
+    # ---- fast lane: the newest request's prefill and first frames run on the single-stream engine on
+    #      its own CUDA stream, concurrently with the batched step already in flight; its first chunk
+    #      is decoded and returned at once, then its state joins a batch slot.
+
+    def admit_fast(self, slot, prompt, max_frames, meta, K0=2):
+        """Returns (int16 PCM bytes of the first chunk, finished). Call after launching the batched step."""
+        E = self.e
+        if not hasattr(self, "fast_stream"):
+            self.fast_stream = torch.cuda.Stream()
+        fs, main = self.fast_stream, torch.cuda.current_stream()
+        with torch.cuda.stream(fs):
+            if getattr(self, "_e_ev", None) is not None:
+                fs.wait_event(self._e_ev)  # single engine's KV scratch is shared with packed admission
+            E.prefill(prompt)
+            T = E.pos_host
+            codes0 = E.step_frames(K0).clone()
+            ev = torch.cuda.Event()
+            ev.record(fs)
+        c0 = codes0[:, 0].tolist()  # waits for the fast lane only (the batched step keeps running)
+        k = c0.index(E.eos) if E.eos in c0 else K0
+        k = min(k, max_frames)
+        done = k < K0 or max_frames <= K0
+        # first chunk straight from the fast lane's codes
+        self.dec_stream.wait_event(ev)
+        with torch.cuda.stream(self.dec_stream):
+            R = self._prime(slot, prompt.ref_codes)
+            g = self._dec_graph(K0)
+            sl = torch.full((1,), slot, dtype=torch.int32, device=self.dev)
+            pos = torch.full((1,), R, dtype=torch.int32, device=self.dev)
+            wav = g(codes0[None].contiguous(), sl, pos)
+            pcm = (wav[0, :k * self.sdec.spf].clamp(-1.0, 1.0) * 32767.0).to(torch.int16).cpu()
+        b = pcm.numpy().tobytes() if k else b""
+        if done:
+            return b, True
+        # hand the stream over to the batch: ordered after the batched step in flight on `main`
+        main.wait_event(ev)
+        self.kc[:, slot, :, :T + K0].copy_(E.kc[:, :, :T + K0])
+        self.vc[:, slot, :, :T + K0].copy_(E.vc[:, :, :T + K0])
+        self.code0[slot:slot + 1].copy_(E.code0)
+        self.hidden[slot:slot + 1].copy_(E.hidden)
+        self.pos[slot:slot + 1].copy_(E.pos)
+        self.step[slot:slot + 1].copy_(E.step)
+        self.fidx[slot:slot + 1].copy_(E.fidx)
+        self.seen[slot].copy_(E.seen)
+        self.trail[slot].copy_(E.trail[:self.L])
+        self.codes[slot, :K0].copy_(codes0)
+        self._e_ev = torch.cuda.Event()
+        self._e_ev.record(main)
+        self.info[slot] = dict(pos=T + K0, frames=K0, dec_pos=R + K0, max_frames=max_frames, done=False,
+                               meta=meta, valid=k, dec=k, ci=1)
+        return b, False
 
     def release(self, slot: int):
         self.info[slot] = None
@@ -382,7 +436,7 @@ class BatchEngine:
 
     # ---- growing decode chunks: first chunk after 2 frames (fast start), then 4, 8, 16 frames per
     #      decode call, so the codec runs far fewer, larger batches per second of audio.
-    RAMP = (2, 4, 8, 16)
+    RAMP = (2, 2, 4, 8, 16)  # a second small chunk builds the playback buffer before chunks grow
     # streams x frames per codec call: the late codec layers launch (rows / 32) blocks on one grid axis,
     # which must stay below 65535 (rows = streams * frames * 1920 samples)
     DEC_FRAME_BUDGET = 1024
@@ -405,7 +459,7 @@ class BatchEngine:
         """Synchronous convenience wrapper: launch due decodes and wait for them."""
         return self.decode_finish(self.decode_launch())
 
-    def decode_launch(self):
+    def decode_launch(self, split_first=False):
         """Launch decodes for every slot whose pending frames reached its next chunk size (or that
         finished) on the decode stream, without waiting. PCM is converted to int16 on the GPU and
         copied asynchronously into pinned host memory. Bookkeeping advances at launch time.
@@ -417,26 +471,28 @@ class BatchEngine:
             pend = it["valid"] - it["dec"]
             if pend <= 0:
                 if it["done"]:
-                    groups.setdefault(0, []).append((s, 0))
+                    groups.setdefault((0, False), []).append((s, 0))
                 continue
             target = self.RAMP[min(it["ci"], len(self.RAMP) - 1)]
+            first = split_first and it["ci"] == 0
             if pend >= target:
-                groups.setdefault(target, []).append((s, target))
+                groups.setdefault((target, first), []).append((s, target))
             elif it["done"]:
                 F = next(f for f in self.RAMP if f >= pend)
-                groups.setdefault(F, []).append((s, pend))
-        calls = []
-        for F, items in groups.items():
+                groups.setdefault((F, first), []).append((s, pend))
+        firsts, calls = [], []
+        for (F, first), items in groups.items():
+            dst = firsts if first else calls
             if F == 0:
                 for s, _ in items:
                     self.info[s]["flushed"] = True
-                calls.append((None, None, [(s, 0, True) for s, _ in items], 0))
+                dst.append((None, None, [(s, 0, True) for s, _ in items], 0))
                 continue
             g = self._dec_graph(F)
             mb = self._dec_max_b(F)
             for j in range(0, len(items), mb):
-                calls.append(self._decode_group(g, F, items[j:j + mb]))
-        return calls
+                dst.append(self._decode_group(g, F, items[j:j + mb]))
+        return (firsts, calls) if split_first else calls
 
     def decode_finish(self, calls):
         """Wait for launched decodes -> [(slot, int16 pcm bytes or None, finished)]."""

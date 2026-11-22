@@ -31,7 +31,7 @@ CONCS = "1,8,32,64,128,256,384,512"
 
 
 @app.function(image=img, gpu="H100!", volumes=VOLS, timeout=7200, cpu=16.0, memory=65536)
-def run(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str = "uqtgo"):
+def run(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str = "uqtgo", fast_max: int = 8, reqs_per_client: int = 4):
     import torch
 
     sys.path.insert(0, "/root/h2h")
@@ -43,7 +43,7 @@ def run(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str =
         except Exception as e:
             print(k, "unreadable", e, flush=True)
     sock = "/tmp/uqt.sock"
-    env = dict(os.environ, UQT_STATS="1")
+    env = dict(os.environ, UQT_STATS="1", UQT_FAST_MAX=str(fast_max))
     eng = subprocess.Popen([sys.executable, "-m", "uqt.engine_proc", "--sock", sock, "--max-slots", str(max_slots),
                             "--max-len", str(max_len)], cwd="/root", stdout=sys.stdout, stderr=sys.stderr, env=env)
     gw = subprocess.Popen(["/usr/local/bin/uqt-gw", "-sock", sock, "-addr", "127.0.0.1:8091"],
@@ -63,7 +63,7 @@ def run(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str =
         res["latency"] = latency(url, make, texts[:60], ids=[m["id"] for m in man[:60]],
                                  out_dir=f"/data/gen/h2h-{tag}-CustomVoice")
         print("h2h-latency", json.dumps(res["latency"]["summary"]), flush=True)
-        res["load"] = load(url, make, texts, concs=tuple(int(c) for c in concs.split(",")), reqs_per_client=4)
+        res["load"] = load(url, make, texts, concs=tuple(int(c) for c in concs.split(",")), reqs_per_client=reqs_per_client)
         os.makedirs("/data/results", exist_ok=True)
         json.dump(res, open(f"/data/results/h2h-{tag}.json", "w"), indent=1)
         data_vol.commit()
@@ -74,8 +74,9 @@ def run(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str =
 
 
 @app.local_entrypoint()
-def main(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str = "uqtgo"):
-    r = run.remote(concs, max_slots, max_len, tag)
+def main(concs: str = CONCS, max_slots: int = 512, max_len: int = 512, tag: str = "uqtgo", fast_max: int = 8,
+         reqs_per_client: int = 4):
+    r = run.remote(concs, max_slots, max_len, tag, fast_max, reqs_per_client)
     os.makedirs("results/h2h", exist_ok=True)
     json.dump(r, open(f"results/h2h/{tag}.json", "w"), indent=1)
     print(json.dumps(r["latency"]["summary"], indent=1))

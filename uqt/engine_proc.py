@@ -113,7 +113,7 @@ def selfwarm(eng, be, waves=(1, 16, 64, 256, 512), K=2, max_frames=120):
     print(f"[uqt.engine_proc] self-warm {waves} in {time.perf_counter() - t0:.0f}s", flush=True)
 
 
-def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400):
+def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True):
     import torch
 
     q: queue.Queue = queue.Queue()
@@ -150,6 +150,10 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400):
                     continue
                 taken.add(slot)
                 batch.append((slot, p, max_frames, {"id": rid, "recv": req["_recv"], "admit": time.perf_counter()}))
+            # the newest request takes the fast lane (run after the batched step is launched, below)
+            # fast lane only while the GPU has slack: under load its concurrent work slows the batched step
+            fast_max = int(os.environ.get("UQT_FAST_MAX", "8"))
+            fast = batch.pop() if (fast_lane and batch and len(be.active()) <= fast_max) else None
             if batch:
                 be.admit_many(batch)
                 stats["admitted"] += len(batch)
@@ -164,12 +168,26 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400):
             if handle is not None or be.active():
                 be.collect(handle) if handle is not None else be.generate(K)
                 handle = be.launch(K) if be.active() else None
+            frames = []
+            if fast is not None:
+                slot, p, mf, meta = fast
+                b, fin = be.admit_fast(slot, p, mf, meta)
+                rid = meta["id"]
+                meta["first"] = time.perf_counter()
+                HOPS["recv_to_admit"].append(meta["admit"] - meta["recv"])
+                HOPS["admit_to_first"].append(meta["first"] - meta["admit"])
+                if b:
+                    frames += [HDR.pack(AUDIO, rid, len(b)), b]
+                if fin:
+                    frames.append(HDR.pack(END, rid, 0))
+                stats["admitted"] += 1
             # decode: launch this step's decodes asynchronously, deliver the previous step's results.
             # At light load deliver immediately (lower latency); under load overlap decode with generation.
             t_d = time.perf_counter()
-            frames = []
             n0 = getattr(be, "dec_calls", 0)
-            launched = be.decode_launch()
+            firsts, launched = be.decode_launch(split_first=True)
+            if firsts:  # a stream's first chunk is never held back
+                _emit(be, be.decode_finish(firsts), cancelled, frames)
             if pending_dec is not None:
                 _emit(be, be.decode_finish(pending_dec), cancelled, frames)
                 pending_dec = None
@@ -225,6 +243,16 @@ def main():
         eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False)
         be = BatchEngine(eng, max_slots=args.max_slots, max_len=args.max_len)
         be.warmup(Ks=(2,))
+        wp = eng.build_prompt("custom", text="Warming up the fast lane for new requests.", language="English",
+                              speaker="Ryan")
+        eng.warmup(wp, Ks=(2,), max_bucket=min(1024, args.max_len), prefill_max=512)
+        for i, tx in enumerate(["Hi.", "A somewhat longer warm-up sentence for the fast lane path.",
+                                "An even longer warm-up sentence, so that a larger prefill bucket is exercised "
+                                "by the fast lane before any real request arrives at the server."]):
+            p = eng.build_prompt("custom", text=tx, language="English", speaker="Ryan")
+            be.admit_fast(i, p, 50, {"id": 0})
+            be.release(i)
+        torch.cuda.synchronize()
     selfwarm(eng, be)
     if os.path.exists(args.sock):
         os.unlink(args.sock)
