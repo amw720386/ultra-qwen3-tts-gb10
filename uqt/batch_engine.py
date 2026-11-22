@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import time
 
+import os
+
 import torch
 import torch.nn.functional as F
 
@@ -444,6 +446,7 @@ class BatchEngine:
 
     # ---- growing decode chunks: first chunk after 2 frames (fast start), then 4, 8, 16 frames per
     #      decode call, so the codec runs far fewer, larger batches per second of audio.
+    EARLY_CHUNKS = int(os.environ.get("UQT_EARLY_CHUNKS", "1"))  # 2 cut underruns at 64 clients (12% -> 4%) but not at 128+
     RAMP = (2, 2, 4, 8, 16)  # a second small chunk builds the playback buffer before chunks grow
     # streams x frames per codec call: the late codec layers launch (rows / 32) blocks on one grid axis,
     # which must stay below 65535 (rows = streams * frames * 1920 samples)
@@ -482,7 +485,9 @@ class BatchEngine:
                     groups.setdefault((0, False), []).append((s, 0))
                 continue
             target = self.RAMP[min(it["ci"], len(self.RAMP) - 1)]
-            first = split_first and it["ci"] == 0
+            # the first EARLY_CHUNKS chunks of a stream are never held back by the caller: they build the
+            # client's playback buffer, and a late second chunk is an audible gap
+            first = split_first and it["ci"] < self.EARLY_CHUNKS
             if pend >= target:
                 groups.setdefault((target, first), []).append((s, target))
             elif it["done"]:
