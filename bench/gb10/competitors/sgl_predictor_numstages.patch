@@ -1,0 +1,4 @@
+89c89
+< NUM_STAGES = 3
+---
+> NUM_STAGES = int(__import__("os").environ.get("SGLANG_OMNI_PREDICTOR_NUM_STAGES", "3"))  # local patch: sm_12x has 99 KiB smem
