@@ -579,6 +579,17 @@ class FusedCodePredictor:
                 L["qkv"] = c(L["qkv"].float() * L["ln1"].float()[:, None])
                 L["gu"] = c(L["gu"].float() * L["ln2"].float()[:, None])
 
+    def quantize(self, kind: str) -> None:
+        """Weight-only quantization of the cuBLAS-path projections and heads (uqt.wq)."""
+        from uqt.wq import QW
+
+        assert not self._pdl_configs, "quantized code predictor uses the non-PDL path (set UQT_NO_PDL=1)"
+        for L in self.layers:
+            for key in ("qkv", "o", "gu", "down"):
+                L[key + "_q"] = QW(L[key].t().contiguous(), kind)  # stored [K, N]; QW wants [N, K]
+        self.lm_heads_q = [QW(h.t().contiguous(), kind) for h in self.lm_heads]
+        self.q = kind
+
     def _pdl_shapes_fit(self) -> bool:
         L = self.layers[0]
         inter = L["gu"].shape[1] // 2
@@ -727,7 +738,10 @@ class FusedCodePredictor:
         L = self.layers[li]
         rows = x.shape[0]
         # qkv / gate-up weights carry the RMSNorm weights; the consuming kernels apply the row scales.
-        qkv = torch.mm(x, L["qkv"])
+        q = getattr(self, "q", None)
+        if q:
+            from uqt.wq import lin
+        qkv = lin(x, L["qkv_q"]) if q else torch.mm(x, L["qkv"])
         att = torch.empty(rows, self.heads * self.head_dim, device=x.device, dtype=x.dtype)
         _cp_attention_kernel[(B, self.heads, nq)](
             qkv, self.cache[li, 0], self.cache[li, 1], L["qn"], L["kn"], self.cos, self.sin, att,
@@ -735,14 +749,20 @@ class FusedCodePredictor:
             NQ=nq, H=self.heads, KVH=self.kv_heads, HD=self.head_dim, MAXP=self.max_pos,
             BK=self._attn_keys, HID=self.hidden, ROW_RMS=True, num_warps=1,
         )  # fmt: skip
-        x.addmm_(att, L["o"])
-        gu = torch.mm(x, L["gu"])
+        if q:
+            x.add_(lin(att, L["o_q"]))
+        else:
+            x.addmm_(att, L["o"])
+        gu = lin(x, L["gu_q"]) if q else torch.mm(x, L["gu"])
         inter = gu.shape[1] // 2
         a = torch.empty(rows, inter, device=x.device, dtype=x.dtype)
         _silu_mul_rms_kernel[(rows, triton.cdiv(inter, 1024))](
             gu, x, x.stride(0), a, L["eps2"], N=inter, BN=1024, HID=self.hidden
         )
-        x.addmm_(a, L["down"])
+        if q:
+            x.add_(lin(a, L["down_q"]))
+        else:
+            x.addmm_(a, L["down"])
 
     @torch.inference_mode()
     def __call__(
@@ -774,7 +794,11 @@ class FusedCodePredictor:
             last = x[nq - 1 :: nq] if nq > 1 else x
             hf = torch.empty(B, self.hidden, device=dev, dtype=dt)
             _rms_rows_kernel[(B,)](last, last.stride(0), self.norm_w, hf, self.eps, N=self.hidden)
-            logits = torch.mm(hf, self.lm_heads[step - 1])
+            if getattr(self, "q", None):
+                from uqt.wq import lin
+                logits = lin(hf, self.lm_heads_q[step - 1])
+            else:
+                logits = torch.mm(hf, self.lm_heads[step - 1])
             has_next = step < self.groups - 1
             nxt = torch.empty(B, self.hidden, device=dev, dtype=dt) if has_next else self._dummy
             us = u[:, step - 1]

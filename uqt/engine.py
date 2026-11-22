@@ -21,6 +21,8 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
+from uqt.wq import lin
+
 
 class _Captured(Exception):
     pass
@@ -84,7 +86,7 @@ class _Stack:
         T = x.shape[0]
         for i, p in enumerate(self.L):
             h = _rms(x, p["ln1"], self.eps)
-            q, k, v = F.linear(h, p["wqkv"]).split([self.nq, self.nk, self.nk], dim=-1)
+            q, k, v = lin(h, p["wqkv"]).split([self.nq, self.nk, self.nk], dim=-1)
             q = _rms(q.view(T, self.nh, self.hd), p["qn"], self.eps)
             k = _rms(k.view(T, self.nkv, self.hd), p["kn"], self.eps)
             v = v.view(T, self.nkv, self.hd)
@@ -92,10 +94,10 @@ class _Stack:
             k = k * cos[:, None] + _rot_half(k) * sin[:, None]
             write(i, k, v)
             o = _attn(q, kc[i, :, :S], vc[i, :, :S], mask, self.nkv)
-            x = x + F.linear(o, p["wo"])
+            x = x + lin(o, p["wo"])
             h = _rms(x, p["ln2"], self.eps)
-            g, u = F.linear(h, p["wgu"]).chunk(2, dim=-1)
-            x = x + F.linear(F.silu(g) * u, p["wd"])
+            g, u = lin(h, p["wgu"]).chunk(2, dim=-1)
+            x = x + lin(F.silu(g) * u, p["wd"])
         return _rms(x, self.norm, self.eps)
 
 
@@ -125,7 +127,7 @@ class Engine:
     def __init__(self, tts, max_len: int = 2048, sampling: SamplingCfg | None = None,
                  compile: bool = True, graph_decoder: bool = True, triton_sampler: bool = True,
                  fused_cp: bool = True, streaming_codec: bool = True, autotune: bool = True,
-                 fused_talker: bool = False):
+                 fused_talker: bool = False, weights: str = "bf16"):
         self.tts = tts
         m = tts.model
         m.requires_grad_(False)
@@ -147,6 +149,14 @@ class Engine:
         self.head = t.codec_head.weight
         self.cp_emb = [e.weight for e in cp.model.codec_embedding]
         self.cp_head = [h.weight for h in cp.lm_head]
+        self.weights = weights
+        if weights != "bf16":
+            from uqt.wq import QW
+            for st in (self.talker, self.cp):
+                for p in st.L:
+                    for k in ("wqkv", "wo", "wgu", "wd"):
+                        p[k] = QW(p[k], weights)
+            self.head = QW(self.head, weights)
         proj = cp.small_to_mtp_projection
         self.proj_w = getattr(proj, "weight", None)
         self.proj_b = getattr(proj, "bias", None)
@@ -226,6 +236,8 @@ class Engine:
         if fused_cp and dt == torch.bfloat16:
             from uqt.fused_cp import FusedCodePredictor
             self.fcp = FusedCodePredictor(cp, max_batch=1)
+            if weights != "bf16":
+                self.fcp.quantize(weights)
             self.fcodes = torch.zeros(1, self.n_groups, dtype=torch.long, device=dev)
             self.fcp_u = torch.empty(1, self.n_groups - 1, cpc.vocab_size, device=dev, dtype=torch.float32)
 
@@ -305,7 +317,7 @@ class Engine:
         return idx.gather(-1, (p / e).argmax(-1, keepdim=True))
 
     def _talker_logits(self, h, ban_eos):
-        return self._logits_sample(F.linear(h, self.head)[0], ban_eos)
+        return self._logits_sample(lin(h, self.head)[0], ban_eos)
 
     def _logits_sample(self, logits, ban_eos):
         s = logits.float()

@@ -30,20 +30,21 @@ def main():
     ap.add_argument("--batch", default="1,8,32,64,128,256")
     ap.add_argument("--autotune", type=int, default=0)
     ap.add_argument("--skip-single", type=int, default=0)
+    ap.add_argument("--weights", default="bf16")
     args = ap.parse_args()
     from qwen_tts import Qwen3TTSModel
 
     from uqt.engine import Engine
 
     out = {"gpu": torch.cuda.get_device_name(0), "torch": torch.__version__, "cap": torch.cuda.get_device_capability(),
-           "pdl": not os.environ.get("UQT_NO_PDL")}
+           "pdl": not os.environ.get("UQT_NO_PDL"), "weights": args.weights}
     torch.set_grad_enabled(False)
     tts = Qwen3TTSModel.from_pretrained(f"Qwen/Qwen3-TTS-12Hz-1.7B-{args.variant}", device_map="cuda:0",
                                         dtype=torch.bfloat16, attn_implementation="sdpa")
     with torch.inference_mode():
         if not args.skip_single:
             t0 = time.time()
-            eng = Engine(tts, max_len=2048, autotune=bool(args.autotune))
+            eng = Engine(tts, max_len=2048, autotune=bool(args.autotune), weights=args.weights)
             p = eng.build_prompt("custom", text=TEXTS[1], language="English", speaker="Ryan")
             eng.warmup(p, Ks=(1, 2, 4, 8), max_bucket=1024, prefill_max=512)
             for _ in range(2):
@@ -80,7 +81,7 @@ def main():
             torch.cuda.empty_cache()
         # batched step-time scan
         from uqt.batch_engine import BatchEngine
-        eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False)
+        eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
         Bs = [int(b) for b in args.batch.split(",")]
         be = BatchEngine(eng, max_slots=max(Bs), max_len=512)
         t0 = time.time()

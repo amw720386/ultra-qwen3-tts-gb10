@@ -16,6 +16,7 @@ import torch.nn.functional as F
 
 from uqt import kernels
 from uqt.engine import _rms, _rot_half
+from uqt.wq import lin
 
 
 B_BUCKETS = (1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512)
@@ -58,8 +59,12 @@ class BatchEngine:
         self.arange = torch.arange(max_len, device=dev)
         cp = eng.m.talker.code_predictor
         self.fcp = FusedCodePredictor(cp, max_batch=max_slots)
+        if getattr(eng, "weights", "bf16") != "bf16":
+            self.fcp.quantize(eng.weights)
         self.fcp_u = torch.empty(max_slots, 15, cp.config.vocab_size, device=dev, dtype=torch.float32)
         self.t_u = torch.empty(max_slots, V, device=dev, dtype=torch.float32)
+        import os
+        self.battn = os.environ.get("UQT_BATTN", "1") == "1"
         self._btalker_c = torch.compile(self._btalker, fullgraph=True, dynamic=True)
         self.graphs: dict = {}
         self._pool = None
@@ -87,24 +92,27 @@ class BatchEngine:
         g = nh // nkv
         for i, p in enumerate(Tk.L):
             h = _rms(x, p["ln1"], Tk.eps)
-            q, k, v = F.linear(h, p["wqkv"]).split([Tk.nq, Tk.nk, Tk.nk], dim=-1)
+            q, k, v = lin(h, p["wqkv"]).split([Tk.nq, Tk.nk, Tk.nk], dim=-1)
             q = _rms(q.view(B, nh, hd), p["qn"], Tk.eps)
             k = _rms(k.view(B, nkv, hd), p["kn"], Tk.eps)
             v = v.view(B, nkv, hd)
             q = q * cos + _rot_half(q) * sin
             k = k * cos + _rot_half(k) * sin
             kernels.kv_write_rows(self.kc, self.vc, k, v, pos, i)
-            Kc = self.kc[i, :B, :, :Lb]
-            Vc = self.vc[i, :B, :, :Lb]
-            sc = torch.matmul(q.view(B, nkv, g, hd), Kc.transpose(-1, -2)) * (hd ** -0.5) + mask
-            pr = torch.softmax(sc, dim=-1, dtype=torch.float32).to(self.dt)
-            o = torch.matmul(pr, Vc).reshape(B, nh * hd)
-            x = x + F.linear(o, p["wo"])
+            if self.battn:  # per-row live-length decode attention (one kernel, no padded reads)
+                o = kernels.bdec_attn(q, self.kc[i], self.vc[i], pos, hd ** -0.5)
+            else:
+                Kc = self.kc[i, :B, :, :Lb]
+                Vc = self.vc[i, :B, :, :Lb]
+                sc = torch.matmul(q.view(B, nkv, g, hd), Kc.transpose(-1, -2)) * (hd ** -0.5) + mask
+                pr = torch.softmax(sc, dim=-1, dtype=torch.float32).to(self.dt)
+                o = torch.matmul(pr, Vc).reshape(B, nh * hd)
+            x = x + lin(o, p["wo"])
             h = _rms(x, p["ln2"], Tk.eps)
-            ga, up = F.linear(h, p["wgu"]).chunk(2, dim=-1)
-            x = x + F.linear(F.silu(ga) * up, p["wd"])
+            ga, up = lin(h, p["wgu"]).chunk(2, dim=-1)
+            x = x + lin(F.silu(ga) * up, p["wd"])
         h = _rms(x, Tk.norm, Tk.eps)
-        lg = F.linear(h, E.head).float()
+        lg = lin(h, E.head).float()
         rp = s.repetition_penalty
         seen = self.seen[:B]
         if rp != 1.0:
@@ -225,7 +233,7 @@ class BatchEngine:
         h = Tk.forward(self.pk_emb[:Tb], E.t_cos[pos], E.t_sin[pos], E.kc, E.vc,
                        E._write_static(E.kc, E.vc, 0), Tb, mask)
         hl = h.index_select(0, self.pk_last)
-        lg = F.linear(hl, E.head).float()
+        lg = lin(hl, E.head).float()
         lg = lg.masked_fill(E.suppress[None, :], float("-inf"))
         if s.min_new_tokens > 0:
             lg = lg.masked_fill(E.eos_mask[None, :], float("-inf"))

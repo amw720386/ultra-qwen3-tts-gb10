@@ -142,3 +142,53 @@ def topk_sample_rows(logits: torch.Tensor, u: torch.Tensor, inv_temp: float, top
 @topk_sample_rows.register_fake
 def _(logits, u, inv_temp, top_k):
     return logits.new_empty(logits.shape[0], dtype=torch.long)
+
+
+# ----------------------------------------------------------------------------- batched decode attention
+
+@triton.jit
+def _bdec_attn_kernel(q_ptr, kc_ptr, vc_ptr, pos_ptr, o_ptr, scale, sk_b, sk_h, sk_t,
+                      H: tl.constexpr, HD: tl.constexpr, BLK: tl.constexpr, G: tl.constexpr):
+    """One program per (row b, kv head): online softmax over that row's live keys [0, pos[b]] only."""
+    b = tl.program_id(0)
+    kvh = tl.program_id(1)
+    pos = tl.load(pos_ptr + b).to(tl.int32)
+    d = tl.arange(0, HD)
+    hq = kvh * G + tl.arange(0, G)
+    q = tl.load(q_ptr + b * H * HD + hq[:, None] * HD + d[None, :]).to(tl.float32)  # [G, HD]
+    base = b.to(tl.int64) * sk_b + kvh.to(tl.int64) * sk_h
+    m = tl.full([G], float("-inf"), tl.float32)
+    l = tl.zeros([G], tl.float32)
+    acc = tl.zeros([G, HD], tl.float32)
+    for t0 in range(0, pos + 1, BLK):
+        t = t0 + tl.arange(0, BLK)
+        tm = t <= pos
+        k = tl.load(kc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0).to(tl.float32)
+        s = tl.sum(q[:, None, :] * k[None, :, :], axis=2) * scale  # [G, BLK]
+        s = tl.where(tm[None, :], s, float("-inf"))
+        m_new = tl.maximum(m, tl.max(s, axis=1))
+        p = tl.exp(s - m_new[:, None])
+        alpha = tl.exp(m - m_new)
+        l = l * alpha + tl.sum(p, axis=1)
+        v = tl.load(vc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0).to(tl.float32)
+        acc = acc * alpha[:, None] + tl.sum(p[:, :, None] * v[None, :, :], axis=1)
+        m = m_new
+    out = acc / l[:, None]
+    tl.store(o_ptr + b * H * HD + hq[:, None] * HD + d[None, :], out.to(o_ptr.dtype.element_ty))
+
+
+@torch.library.custom_op("uqt::bdec_attn", mutates_args=())
+def bdec_attn(q: torch.Tensor, kc: torch.Tensor, vc: torch.Tensor, pos: torch.Tensor, scale: float) -> torch.Tensor:
+    """q [B, H, HD]; kc/vc [S, KVH, T, HD] (one layer, row b = slot b); pos [B] -> [B, H * HD]."""
+    B, H, HD = q.shape
+    KVH = kc.shape[1]
+    q = q.contiguous()
+    out = torch.empty(B, H * HD, dtype=q.dtype, device=q.device)
+    _bdec_attn_kernel[(B, KVH)](q, kc, vc, pos, out, scale, kc.stride(0), kc.stride(1), kc.stride(2),
+                                H=H, HD=HD, BLK=32, G=H // KVH, num_warps=4)
+    return out
+
+
+@bdec_attn.register_fake
+def _(q, kc, vc, pos, scale):
+    return q.new_empty(q.shape[0], q.shape[1] * q.shape[2])
