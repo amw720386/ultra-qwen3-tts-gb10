@@ -44,13 +44,23 @@ profilers and microbenchmarks are in `bench/gb10/`; measured outputs are in `res
 
 Switches: `--weights bf16|fp8` selects the weight format; `UQT_BATTN=0` turns off batched decode
 attention; `UQT_RES_UNIT=0`, `UQT_FUSED_TRANS=0` and `UQT_MM_RES=0` disable individual fused codec
-kernels for A/B comparisons.
+kernels for A/B comparisons; `UQT_FP8_BIG=0` keeps bf16 weights above 128 rows; `UQT_KV_TRITON=0`
+uses indexed assignment for cache writes.
+
+Server experiments kept as opt-in switches (measured on GB10, no throughput gain at 1-256 clients):
+`UQT_K_HIGH=4` (4-frame steps under load), `UQT_ADMIT_MIN=4` (batch admissions under load),
+`UQT_EARLY_CHUNKS=2` (never defer the second audio chunk; fewer underruns at 64 clients only).
+Measured but not adopted: a W8A8 Triton GEMM (FP8 activations per row per K block) ran no faster
+than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8_triton_test.json`).
 
 ## Techniques
 
 - **FP8 weight-only GEMMs** (`uqt/wq.py`): linear weights stored as float8 e4m3 with one fp32
   scale per output channel, dequantized in registers inside Triton kernels; tensor-core math stays
-  bf16. Half the weight bytes of bf16 per decode step. Large-M calls (prefill) use bf16 weights.
+  bf16. Half the weight bytes of bf16 per decode step. Above 128 rows a second kernel with a
+  row-tile-fastest grid (each weight tile read from DRAM about once) is used where it measured
+  faster: every shape up to 192 rows, the widest projections up to 320 (+19-21% engine throughput at
+  160-192 streams). Prefill-sized calls use bf16 weights.
 - **Batched live-length decode attention** (`kernels.bdec_attn`): one kernel attends every active
   stream over only its own live KV length instead of padding to the longest stream in the batch.
 - **Fused streaming codec kernels** (`uqt/streaming_codec.py`), on the stateful, frame-exact
@@ -58,6 +68,7 @@ kernels for A/B comparisons.
   - fused residual unit: conv1 + activation + conv2 + residual add in one kernel;
   - fused block entry: SnakeBeta + transposed convolution as one implicit GEMM;
   - fused output convolution with the final SnakeBeta folded in.
+- **Single-launch K/V cache writes** for the batched step (`kernels.kv_write_rows`).
 - **Tuned implicit-GEMM tiles**: tile shapes per decoder width (including the 768-wide units),
   swept on GB10 at the shapes the batched engine runs.
 - Carried over from the H100 engines: CUDA-graphed Talker and code-predictor steps, the fused
