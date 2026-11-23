@@ -1,0 +1,8 @@
+{
+ "slots": 256,
+ "weights": "hyb",
+ "n": 300,
+ "wer_corpus": 0.03010592826612154,
+ "catastrophic": 2,
+ "wer_excl_catastrophic": 0.023689610147360568
+}

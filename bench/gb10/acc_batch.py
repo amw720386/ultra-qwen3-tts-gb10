@@ -21,6 +21,7 @@ def main():
     ap.add_argument("--weights", default="fp8")
     ap.add_argument("--manifest", default="/root/manifest.json")
     ap.add_argument("--out", default="/root/results/acc_batch")
+    ap.add_argument("--eval-only", action="store_true", help="re-score wavs already in the output dir")
     args = ap.parse_args()
     from qwen_tts import Qwen3TTSModel
 
@@ -33,43 +34,44 @@ def main():
     os.makedirs(d, exist_ok=True)
     torch.set_grad_enabled(False)
     torch.manual_seed(0)
-    tts = Qwen3TTSModel.from_pretrained("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice", device_map="cuda:0",
-                                        dtype=torch.bfloat16, attn_implementation="sdpa")
-    with torch.inference_mode():
-        eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
-        be = BatchEngine(eng, max_slots=args.slots, max_len=512)
-        be.warmup(Ks=(2,))
-        pend = list(reversed(man))
-        owner, pcm = {}, {}
-        handle, t0, done = None, time.time(), 0
-        while pend or handle is not None or any(it is not None for it in be.info):
-            batch = []
-            while pend and len(batch) < 16:
-                slot = next((i for i, it in enumerate(be.info) if it is None and i not in owner), None)
-                if slot is None:
-                    break
-                it = pend.pop()
-                owner[slot] = it["id"]
-                pcm[it["id"]] = []
-                batch.append((slot, eng.build_prompt("custom", text=it["target_text"], language="English",
-                                                     speaker="Ryan"), 400, {"id": it["id"]}))
-            if batch:
-                be.admit_many(batch)
-            if handle is not None or be.active():
-                be.collect(handle) if handle is not None else be.generate(2)
-                handle = be.launch(2) if be.active() else None
-            for s, b, fin in be.decode_due():
-                if b:
-                    pcm[owner[s]].append(b)
-                if fin:
-                    rid = owner.pop(s)
-                    wav = np.frombuffer(b"".join(pcm.pop(rid)), dtype=np.int16).astype(np.float32) / 32767.0
-                    sf.write(f"{d}/{rid}.wav", wav, 24000)
-                    be.release(s)
-                    done += 1
-        print(f"generated {done} clips in {time.time() - t0:.1f}s", flush=True)
-        del be, eng
-    del tts
+    if not args.eval_only:
+        tts = Qwen3TTSModel.from_pretrained("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice", device_map="cuda:0",
+                                            dtype=torch.bfloat16, attn_implementation="sdpa")
+        with torch.inference_mode():
+            eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
+            be = BatchEngine(eng, max_slots=args.slots, max_len=512)
+            be.warmup(Ks=(2,))
+            pend = list(reversed(man))
+            owner, pcm = {}, {}
+            handle, t0, done = None, time.time(), 0
+            while pend or handle is not None or any(it is not None for it in be.info):
+                batch = []
+                while pend and len(batch) < 16:
+                    slot = next((i for i, it in enumerate(be.info) if it is None and i not in owner), None)
+                    if slot is None:
+                        break
+                    it = pend.pop()
+                    owner[slot] = it["id"]
+                    pcm[it["id"]] = []
+                    batch.append((slot, eng.build_prompt("custom", text=it["target_text"], language="English",
+                                                         speaker="Ryan"), 400, {"id": it["id"]}))
+                if batch:
+                    be.admit_many(batch)
+                if handle is not None or be.active():
+                    be.collect(handle) if handle is not None else be.generate(2)
+                    handle = be.launch(2) if be.active() else None
+                for s, b, fin in be.decode_due():
+                    if b:
+                        pcm[owner[s]].append(b)
+                    if fin:
+                        rid = owner.pop(s)
+                        wav = np.frombuffer(b"".join(pcm.pop(rid)), dtype=np.int16).astype(np.float32) / 32767.0
+                        sf.write(f"{d}/{rid}.wav", wav, 24000)
+                        be.release(s)
+                        done += 1
+            print(f"generated {done} clips in {time.time() - t0:.1f}s", flush=True)
+            del be, eng
+        del tts
     torch.cuda.empty_cache()
     r = run_eval(d, man, with_sim=False)
     bad = [x for x in r["rows"] if x["errors"] / max(x["n_ref"], 1) > 0.5]

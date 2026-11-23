@@ -46,10 +46,15 @@ class BatchEngine:
         assert max_len <= eng.max_len
         nl, D, V = len(T.L), eng.t_emb.shape[1], eng.V
         self.dev, self.dt, self.D, self.V = dev, dt, D, V
-        # UQT_KV_FP8=1: e4m3 KV cache (half the attention reads at large batch, where they dominate)
-        self.kv_dt = torch.float8_e4m3fn if os.environ.get("UQT_KV_FP8", "0") == "1" else dt
+        # KV cache format (UQT_KV): bf16; int8 = per-(token, head) absmax-scaled int8, half the attention
+        # reads at large batch; fp8 = plain e4m3 (kept for comparison: garbles some utterances, see kernels.py)
+        self.kv = os.environ.get("UQT_KV", "bf16")
+        self.kv_dt = {"bf16": dt, "fp8": torch.float8_e4m3fn, "int8": torch.int8}[self.kv]
         self.kc = torch.zeros(nl, max_slots, T.nkv, max_len, T.hd, device=dev, dtype=self.kv_dt)
         self.vc = torch.zeros_like(self.kc)
+        if self.kv == "int8":
+            self.ks = torch.zeros(nl, max_slots, T.nkv, max_len, device=dev, dtype=torch.float32)
+            self.vs = torch.zeros_like(self.ks)
         self.code0 = torch.zeros(max_slots, dtype=torch.long, device=dev)
         self.hidden = torch.zeros(max_slots, D, device=dev, dtype=dt)
         self.pos = torch.zeros(max_slots, dtype=torch.long, device=dev)
@@ -101,10 +106,14 @@ class BatchEngine:
             v = v.view(B, nkv, hd)
             q = q * cos + _rot_half(q) * sin
             k = k * cos + _rot_half(k) * sin
-            kernels.kv_write_rows(self.kc, self.vc, k, v, pos, i)
-            if self.battn:  # per-row live-length decode attention (one kernel, no padded reads)
+            if self.kv == "int8":
+                kernels.kv_write_rows_q(self.kc, self.vc, self.ks, self.vs, k, v, pos, i)
+                o = kernels.bdec_attn_q(q, self.kc[i], self.vc[i], self.ks[i], self.vs[i], pos, hd ** -0.5)
+            elif self.battn:  # per-row live-length decode attention (one kernel, no padded reads)
+                kernels.kv_write_rows(self.kc, self.vc, k, v, pos, i)
                 o = kernels.bdec_attn(q, self.kc[i], self.vc[i], pos, hd ** -0.5)
             else:
+                kernels.kv_write_rows(self.kc, self.vc, k, v, pos, i)
                 Kc = self.kc[i, :B, :, :Lb]
                 Vc = self.vc[i, :B, :, :Lb]
                 sc = torch.matmul(q.view(B, nkv, g, hd), Kc.transpose(-1, -2)) * (hd ** -0.5) + mask
@@ -177,6 +186,20 @@ class BatchEngine:
 
     # ------------------------------------------------------------------ slots
 
+    def _kv_put(self, slot, k, v):
+        """Copy one prompt's K/V ([layers, n_kv, T, D], bf16, from the single-stream engine) into `slot`."""
+        T = k.shape[2]
+        if self.kv == "int8":
+            kq, ksc = kernels.quant_rows(k)
+            vq, vsc = kernels.quant_rows(v)
+            self.kc[:, slot, :, :T].copy_(kq)
+            self.vc[:, slot, :, :T].copy_(vq)
+            self.ks[:, slot, :, :T].copy_(ksc)
+            self.vs[:, slot, :, :T].copy_(vsc)
+        else:
+            self.kc[:, slot, :, :T].copy_(k)
+            self.vc[:, slot, :, :T].copy_(v)
+
     def free_slot(self):
         for i, it in enumerate(self.info):
             if it is None:
@@ -190,8 +213,7 @@ class BatchEngine:
         T = E.pos_host
         if T + max_frames + 8 >= self.L:
             max_frames = self.L - T - 9
-        self.kc[:, slot, :, :T].copy_(E.kc[:, :, :T])
-        self.vc[:, slot, :, :T].copy_(E.vc[:, :, :T])
+        self._kv_put(slot, E.kc[:, :, :T], E.vc[:, :, :T])
         self.code0[slot:slot + 1].copy_(E.code0)
         self.hidden[slot:slot + 1].copy_(E.hidden)
         self.pos[slot:slot + 1].copy_(E.pos)
@@ -301,8 +323,7 @@ class BatchEngine:
             T, o = lens[j], offs[j]
             if T + max_frames + 8 >= self.L:
                 max_frames = self.L - T - 9
-            self.kc[:, slot, :, :T].copy_(E.kc[:, :, o:o + T])
-            self.vc[:, slot, :, :T].copy_(E.vc[:, :, o:o + T])
+            self._kv_put(slot, E.kc[:, :, o:o + T], E.vc[:, :, o:o + T])
             self.code0[slot:slot + 1].copy_(self.pk_code0[j:j + 1])
             self.hidden[slot:slot + 1].copy_(self.pk_hidden[j:j + 1])
             self.pos[slot] = T
@@ -357,8 +378,7 @@ class BatchEngine:
             return b, True
         # hand the stream over to the batch: ordered after the batched step in flight on `main`
         main.wait_event(ev)
-        self.kc[:, slot, :, :T + K0].copy_(E.kc[:, :, :T + K0])
-        self.vc[:, slot, :, :T + K0].copy_(E.vc[:, :, :T + K0])
+        self._kv_put(slot, E.kc[:, :, :T + K0], E.vc[:, :, :T + K0])
         self.code0[slot:slot + 1].copy_(E.code0)
         self.hidden[slot:slot + 1].copy_(E.hidden)
         self.pos[slot:slot + 1].copy_(E.pos)

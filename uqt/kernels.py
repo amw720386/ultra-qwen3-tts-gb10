@@ -87,13 +87,14 @@ def kv_write_rows(kc: torch.Tensor, vc: torch.Tensor, k: torch.Tensor, v: torch.
                   pos: torch.Tensor, layer: int) -> None:
     """kc/vc [L, S, n_kv, T, D]; k/v [B, n_kv, D]; pos [B] long. Row b writes slot b at pos[b]."""
     B, H, D = k.shape
-    if _KV_TRITON and k.is_contiguous() and v.is_contiguous() and kc.is_contiguous() and vc.is_contiguous():
+    k, v = k.contiguous(), v.contiguous()  # [B, n_kv, D] is tiny; compiled graphs can hand in strided views
+    if _KV_TRITON and kc.is_contiguous() and vc.is_contiguous():
         L, S, _, T, _ = kc.shape
         _kv_write_rows_kernel[(B, H)](kc, vc, k, v, pos, layer, S, T, H=H, D=D, num_warps=1)
         return
     rows = torch.arange(B, device=k.device)
-    kc[layer][rows, :, pos] = k
-    vc[layer][rows, :, pos] = v
+    kc[layer][rows, :, pos] = k.to(kc.dtype)
+    vc[layer][rows, :, pos] = v.to(vc.dtype)
 
 
 _KV_TRITON = os.environ.get("UQT_KV_TRITON", "1") == "1"
@@ -109,7 +110,7 @@ def _kv_write_rows_kernel(kc_ptr, vc_ptr, k_ptr, v_ptr, pos_ptr, layer, S, T, H:
     lb = (layer * S + b).to(tl.int64)  # cache is > 2^31 elements: index in int64
     dst = ((lb * H + h) * T + p) * D + d
     src = (b * H + h) * D + d
-    # the cache may be FP8 (UQT_KV_FP8): cast on store
+    # the cache may be FP8 (UQT_KV=fp8): cast on store
     tl.store(kc_ptr + dst, tl.load(k_ptr + src).to(kc_ptr.dtype.element_ty))
     tl.store(vc_ptr + dst, tl.load(v_ptr + src).to(vc_ptr.dtype.element_ty))
 
@@ -260,4 +261,111 @@ def bdec_attn(q: torch.Tensor, kc: torch.Tensor, vc: torch.Tensor, pos: torch.Te
 
 @bdec_attn.register_fake
 def _(q, kc, vc, pos, scale):
+    return q.new_empty(q.shape[0], q.shape[1] * q.shape[2])
+
+
+# ----------------------------------------------------------------------------- INT8 KV cache (UQT_KV=int8)
+# Each (token, kv head) row of K and V is stored as int8 with its own fp32 absmax scale. Half the bytes of
+# a BF16 cache, and ~0.5% rounding error per row against ~2.6% for plain e4m3: the talker's keys reach
+# |x| ~ 270, so e4m3 error on K shifts attention logits by several units and garbles some utterances.
+
+def quant_rows(x: torch.Tensor):
+    """x [..., D] -> (int8 [..., D], fp32 scale [...]) with per-row absmax scaling."""
+    s = x.float().abs().amax(-1).clamp_min(1e-8) / 127.0
+    return torch.round(x.float() / s[..., None]).clamp_(-127, 127).to(torch.int8), s
+
+
+@triton.jit
+def _kv_write_rows_q_kernel(kc_ptr, vc_ptr, ks_ptr, vs_ptr, k_ptr, v_ptr, pos_ptr, layer, S, T,
+                            H: tl.constexpr, D: tl.constexpr):
+    b = tl.program_id(0)
+    h = tl.program_id(1)
+    d = tl.arange(0, D)
+    p = tl.load(pos_ptr + b).to(tl.int64)
+    row = ((layer * S + b).to(tl.int64) * H + h) * T + p
+    src = (b * H + h) * D + d
+    k = tl.load(k_ptr + src).to(tl.float32)
+    v = tl.load(v_ptr + src).to(tl.float32)
+    sk = tl.maximum(tl.max(tl.abs(k), axis=0), 1e-8) / 127.0
+    sv = tl.maximum(tl.max(tl.abs(v), axis=0), 1e-8) / 127.0
+    kq = tl.minimum(tl.maximum(k / sk, -127.0), 127.0)
+    vq = tl.minimum(tl.maximum(v / sv, -127.0), 127.0)
+    kq = tl.where(kq >= 0, tl.floor(kq + 0.5), tl.ceil(kq - 0.5))
+    vq = tl.where(vq >= 0, tl.floor(vq + 0.5), tl.ceil(vq - 0.5))
+    tl.store(kc_ptr + row * D + d, kq.to(tl.int8))
+    tl.store(vc_ptr + row * D + d, vq.to(tl.int8))
+    tl.store(ks_ptr + row, sk)
+    tl.store(vs_ptr + row, sv)
+
+
+@torch.library.custom_op("uqt::kv_write_rows_q", mutates_args=("kc", "vc", "ks", "vs"))
+def kv_write_rows_q(kc: torch.Tensor, vc: torch.Tensor, ks: torch.Tensor, vs: torch.Tensor, k: torch.Tensor,
+                    v: torch.Tensor, pos: torch.Tensor, layer: int) -> None:
+    """kc/vc int8 [L, S, n_kv, T, D]; ks/vs fp32 [L, S, n_kv, T]; k/v [B, n_kv, D]; pos [B]."""
+    B, H, D = k.shape
+    _, S, _, T, _ = kc.shape
+    _kv_write_rows_q_kernel[(B, H)](kc, vc, ks, vs, k.contiguous(), v.contiguous(), pos, layer, S, T,
+                                    H=H, D=D, num_warps=1)
+
+
+@kv_write_rows_q.register_fake
+def _(kc, vc, ks, vs, k, v, pos, layer):
+    return None
+
+
+@triton.jit
+def _bdec_attn_q_kernel(q_ptr, kc_ptr, vc_ptr, ks_ptr, vs_ptr, pos_ptr, o_ptr, scale, sk_b, sk_h, sk_t, ss_b, ss_h,
+                        H: tl.constexpr, HD: tl.constexpr, BLK: tl.constexpr, G: tl.constexpr, GP: tl.constexpr):
+    """_bdec_attn_dot_kernel over an int8 cache: int8 -> bf16 is exact, the per-key scales are applied
+    to the logits (K) and to the probabilities (V)."""
+    b = tl.program_id(0)
+    kvh = tl.program_id(1)
+    pos = tl.load(pos_ptr + b).to(tl.int32)
+    d = tl.arange(0, HD)
+    gi = tl.arange(0, GP)
+    gm = gi < G
+    q = tl.load(q_ptr + b * H * HD + (kvh * G + gi)[:, None] * HD + d[None, :], mask=gm[:, None], other=0.0)
+    base = b.to(tl.int64) * sk_b + kvh.to(tl.int64) * sk_h
+    sbase = b.to(tl.int64) * ss_b + kvh.to(tl.int64) * ss_h
+    m = tl.full([GP], float("-inf"), tl.float32)
+    l = tl.zeros([GP], tl.float32)
+    acc = tl.zeros([GP, HD], tl.float32)
+    for t0 in range(0, pos + 1, BLK):
+        t = t0 + tl.arange(0, BLK)
+        tm = t <= pos
+        k = tl.load(kc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0).to(q.dtype)
+        kscl = tl.load(ks_ptr + sbase + t, mask=tm, other=0.0)
+        s = tl.dot(q, tl.trans(k)) * (kscl * scale)[None, :]
+        s = tl.where(tm[None, :], s, float("-inf"))
+        m_new = tl.maximum(m, tl.max(s, axis=1))
+        p = tl.exp(s - m_new[:, None])
+        alpha = tl.exp(m - m_new)
+        l = l * alpha + tl.sum(p, axis=1)
+        v = tl.load(vc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0).to(q.dtype)
+        vscl = tl.load(vs_ptr + sbase + t, mask=tm, other=0.0)
+        acc = acc * alpha[:, None] + tl.dot((p * vscl[None, :]).to(q.dtype), v)
+        m = m_new
+    out = acc / l[:, None]
+    tl.store(o_ptr + b * H * HD + (kvh * G + gi)[:, None] * HD + d[None, :], out.to(o_ptr.dtype.element_ty),
+             mask=gm[:, None])
+
+
+@torch.library.custom_op("uqt::bdec_attn_q", mutates_args=())
+def bdec_attn_q(q: torch.Tensor, kc: torch.Tensor, vc: torch.Tensor, ks: torch.Tensor, vs: torch.Tensor,
+                pos: torch.Tensor, scale: float) -> torch.Tensor:
+    """q [B, H, HD]; kc/vc int8 [S, KVH, T, HD]; ks/vs fp32 [S, KVH, T]; pos [B] -> [B, H * HD]."""
+    B, H, HD = q.shape
+    KVH = kc.shape[1]
+    q = q.contiguous()
+    out = torch.empty(B, H * HD, dtype=q.dtype, device=q.device)
+    G = H // KVH
+    blk, nw, st = BATTN_DOT_CFG
+    _bdec_attn_q_kernel[(B, KVH)](q, kc, vc, ks, vs, pos, out, scale, kc.stride(0), kc.stride(1), kc.stride(2),
+                                  ks.stride(0), ks.stride(1), H=H, HD=HD, BLK=blk, G=G, GP=max(16, G),
+                                  num_warps=nw, num_stages=st)
+    return out
+
+
+@bdec_attn_q.register_fake
+def _(q, kc, vc, ks, vs, pos, scale):
     return q.new_empty(q.shape[0], q.shape[1] * q.shape[2])

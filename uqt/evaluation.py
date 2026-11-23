@@ -15,8 +15,17 @@ def run_eval(wav_dir: str, items: list, with_sim: bool, batch_size: int = 16) ->
                    torch_dtype=torch.float16, device="cuda:0")
     norm = asr.tokenizer.normalize
     audios = [librosa.load(f"{wav_dir}/{it['id']}.wav", sr=16000)[0] for it in items]
-    hyps = asr([{"raw": a, "sampling_rate": 16000} for a in audios], batch_size=batch_size,
-               generate_kwargs={"language": "english", "task": "transcribe", "num_beams": 1})
+    gk = {"language": "english", "task": "transcribe", "num_beams": 1}
+    # clips over Whisper's 30 s window go through the chunked path one at a time: mixed in a batch with
+    # short clips the pipeline fails ("elements of the batch contain different keys")
+    short = [i for i, a in enumerate(audios) if len(a) <= 30 * 16000]
+    hyps = [None] * len(audios)
+    for i, h in zip(short, asr([{"raw": audios[i], "sampling_rate": 16000} for i in short],
+                               batch_size=batch_size, generate_kwargs=gk)):
+        hyps[i] = h
+    for i in (i for i in range(len(audios)) if hyps[i] is None):
+        hyps[i] = asr({"raw": audios[i], "sampling_rate": 16000}, chunk_length_s=30, batch_size=1,
+                      generate_kwargs=gk)
     refs_n = [norm(it["target_text"]) for it in items]
     hyps_n = [norm(h["text"]) for h in hyps]
     rows = []
