@@ -436,11 +436,15 @@ class BatchEngine:
         need = max(self.info[s]["pos"] for s in act) + K + 1
         Lb = next((b for b in self.LB if b >= need and b <= self.L), self.L)
         self._graph(K, B, Lb).replay()
-        rows = torch.tensor(act, device=self.dev)
-        starts = torch.tensor([self.info[s]["frames"] for s in act], device=self.dev)
+        rows = kernels.h2d(act, self.dev)
+        starts = kernels.h2d([self.info[s]["frames"] for s in act], self.dev)
         idx = (starts[:, None] + torch.arange(K, device=self.dev)[None, :]).clamp(max=self.L - 1)
         chunk = self.codes[rows[:, None], idx]
-        c0 = chunk[:, :, 0].to("cpu", non_blocking=True)
+        if kernels.ASYNC_H2D[0]:  # a copy to pageable memory would block here
+            c0 = torch.empty(chunk.shape[:2], dtype=chunk.dtype, pin_memory=True)
+            c0.copy_(chunk[:, :, 0], non_blocking=True)
+        else:
+            c0 = chunk[:, :, 0].to("cpu", non_blocking=True)
         ev = torch.cuda.Event()
         ev.record()
         for s in act:  # host bookkeeping for the frames now in flight
@@ -569,11 +573,11 @@ class BatchEngine:
         slots = [s for s, _ in items]
         with torch.cuda.stream(self.dec_stream):
             self.dec_stream.wait_stream(torch.cuda.current_stream())
-            rows = torch.tensor(slots, device=self.dev)
-            starts = torch.tensor([self.info[s]["dec"] for s in slots], device=self.dev)
+            rows = kernels.h2d(slots, self.dev)
+            starts = kernels.h2d([self.info[s]["dec"] for s in slots], self.dev)
             idx = (starts[:, None] + torch.arange(F, device=self.dev)[None, :]).clamp(max=self.L - 1)
             codes = self.codes[rows[:, None], idx]
-            pos = torch.tensor([self.info[s]["dec_pos"] for s in slots], dtype=torch.int32, device=self.dev)
+            pos = kernels.h2d([self.info[s]["dec_pos"] for s in slots], self.dev, torch.int32)
             wav = g(codes.contiguous(), rows.to(torch.int32), pos)
             pcm = (wav.clamp(-1.0, 1.0) * 32767.0).to(torch.int16)
             host = torch.empty(pcm.shape, dtype=torch.int16, pin_memory=True)

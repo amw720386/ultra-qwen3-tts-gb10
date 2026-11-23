@@ -16,6 +16,8 @@ so the caller falls back to the official builder.
 from __future__ import annotations
 
 import torch
+
+from uqt import kernels
 import torch.nn.functional as F
 
 
@@ -54,7 +56,7 @@ class FastPromptBuilder:
         return self.tok(s)["input_ids"]
 
     def _tensor(self, ids):
-        return torch.tensor(ids, dtype=torch.long, device=self.dev)
+        return kernels.h2d(ids, self.dev, torch.long)
 
     def _proj_ids(self, ids):
         return self.t.text_projection(self.t.get_text_embeddings()(self._tensor(ids)))

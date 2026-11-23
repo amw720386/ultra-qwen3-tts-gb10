@@ -161,7 +161,10 @@ def _retune(be):
         cfg = json.load(open(os.environ["UQT_TUNE_FILE"]))
         _tune_mtime = m
         for k, v in cfg.items():
-            if k in TUNE:
+            if k == "ASYNC_H2D":
+                from uqt import kernels
+                kernels.ASYNC_H2D[0] = v
+            elif k in TUNE:
                 globals()[k] = v
             else:  # DEADLINE, DEADLINE_MARGIN_MS, EARLY_CHUNKS
                 setattr(be, k, v)

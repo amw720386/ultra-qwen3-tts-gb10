@@ -14,8 +14,20 @@ import torch
 import triton
 import triton.language as tl
 
+# torch.tensor(list, device=cuda) is a blocking copy: it waits for everything queued on the stream, so a
+# launch meant to overlap with host work stalls until the step it just launched is done. Off until proven.
+ASYNC_H2D = [int(os.environ.get("UQT_ASYNC_H2D", "0"))]
+
+
+def h2d(data, dev, dtype=None):
+    """Host list -> device tensor; with ASYNC_H2D through pinned memory without waiting for the stream."""
+    if not ASYNC_H2D[0]:
+        return torch.tensor(data, dtype=dtype, device=dev)
+    return torch.tensor(data, dtype=dtype).pin_memory().to(dev, non_blocking=True)
+
 
 @torch.library.custom_op("uqt::kv_write_dyn", mutates_args=("kc", "vc"))
+
 def kv_write_dyn(kc: torch.Tensor, vc: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
                  pos: torch.Tensor, layer: int) -> None:
     """kc/vc [L, n_kv, S, D]; k/v [1, n_kv, D]; pos [1] long."""
