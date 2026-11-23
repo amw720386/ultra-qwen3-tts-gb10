@@ -27,13 +27,6 @@
   "K_HIGH": 0,
   "K_HIGH_AT": 160
  },
- "dl_late_fast": {
-  "DEADLINE": 1,
-  "LATE_ADMIT": 1,
-  "FAST_MAX": 64,
-  "K_HIGH": 0,
-  "K_HIGH_AT": 160
- },
  "dl_late_k4": {
   "DEADLINE": 1,
   "LATE_ADMIT": 1,

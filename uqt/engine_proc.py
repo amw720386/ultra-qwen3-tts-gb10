@@ -169,11 +169,13 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 q.put(q.get())  # idle: block until a request arrives
             if "UQT_TUNE_FILE" in os.environ:
                 _retune(be)
+            t_w = time.perf_counter()
             if LATE_ADMIT and handle is not None:
                 while (not handle[3].query()
                        and time.perf_counter() - t_launch < step_s - LATE_LEAD_MS / 1000):
                     time.sleep(0.001)
             t_a = time.perf_counter()
+            stats["latewait"] = stats.get("latewait", 0.0) + t_a - t_w
             # admission. Under load, hold new requests briefly so several share one packed prefill
             # (the prefill reads every weight once however many prompts it carries).
             hold = False
@@ -227,6 +229,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 kc = K_HIGH if (K_HIGH and len(be.active()) >= K_HIGH_AT) else K
                 if handle is not None:
                     be.collect(handle)
+                    stats["collect"] = stats.get("collect", 0.0) + time.perf_counter() - t_g
                     dt = time.perf_counter() - t_launch
                     step_s = dt if not step_s else 0.7 * step_s + 0.3 * dt
                 else:
@@ -280,7 +283,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                     for v in HOPS.values():
                         v.clear()
                     print("[uqt.hops p90 ms]", json.dumps(hops), flush=True)
-                    print("[uqt.stats]", json.dumps({k: (round(v / it_ * 1000, 2) if k in ("admit", "gen", "dec", "send") else
+                    print("[uqt.stats]", json.dumps({k: (round(v / it_ * 1000, 2) if k in ("admit", "gen", "dec", "send", "latewait", "collect") else
                                                          (round(v / it_, 1) if k in ("active", "dec_calls", "occupied", "queued") else v))
                                                     for k, v in stats.items() if k != "t"}), flush=True)
                     stats = {k: 0 if k != "t" else t_e for k in stats}
