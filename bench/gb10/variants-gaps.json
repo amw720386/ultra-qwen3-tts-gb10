@@ -1,0 +1,44 @@
+{
+ "base": {
+  "DEADLINE": 0,
+  "LATE_ADMIT": 0,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160
+ },
+ "dl": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 0,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160
+ },
+ "late": {
+  "DEADLINE": 0,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160
+ },
+ "dl_late": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160
+ },
+ "dl_late_fast": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 64,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160
+ },
+ "dl_late_k4": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 4,
+  "K_HIGH_AT": 160
+ }
+}

@@ -120,6 +120,33 @@ K_HIGH_AT = int(os.environ.get("UQT_K_HIGH_AT", "96"))
 ADMIT_MIN = int(os.environ.get("UQT_ADMIT_MIN", "1"))
 ADMIT_AT = int(os.environ.get("UQT_ADMIT_AT", "32"))
 ADMIT_WAIT_MS = float(os.environ.get("UQT_ADMIT_WAIT_MS", "60"))
+FAST_MAX = int(os.environ.get("UQT_FAST_MAX", "8"))
+# Admit as late as possible: hold admission until the step in flight is about LATE_LEAD_MS from done, so
+# requests that arrive while it runs join the next step instead of the one after (0: admit at once).
+LATE_ADMIT = int(os.environ.get("UQT_LATE_ADMIT", "0"))
+LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
+TUNE = ("K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+_tune_mtime = None
+
+
+def _retune(be):
+    """Benchmarks only: apply {"NAME": value} from $UQT_TUNE_FILE when the file changes, so variants can
+    alternate inside one warm server."""
+    global _tune_mtime
+    try:
+        m = os.stat(os.environ["UQT_TUNE_FILE"]).st_mtime_ns
+        if m == _tune_mtime:
+            return
+        cfg = json.load(open(os.environ["UQT_TUNE_FILE"]))
+        _tune_mtime = m
+        for k, v in cfg.items():
+            if k in TUNE:
+                globals()[k] = v
+            else:  # DEADLINE, DEADLINE_MARGIN_MS, EARLY_CHUNKS
+                setattr(be, k, v)
+        print("[uqt.tune]", json.dumps(cfg), flush=True)
+    except (OSError, ValueError):
+        pass
 
 
 def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True):
@@ -130,6 +157,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
     threading.Thread(target=_reader, args=(conn, q, cancelled), daemon=True).start()
     conn.sendall(HDR.pack(READY, 0, 0))
     handle = None
+    step_s, t_launch = 0.0, 0.0  # LATE_ADMIT: smoothed launch-to-done time of a step
     pending_dec = None
     waiting: list = []  # requests held for a shared packed prefill (see ADMIT_*)
     stats = {"iters": 0, "admit": 0.0, "gen": 0.0, "dec": 0.0, "send": 0.0, "dec_calls": 0, "admitted": 0,
@@ -139,6 +167,12 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             if (handle is None and pending_dec is None and not waiting and not be.active()
                     and all(it is None for it in be.info)):
                 q.put(q.get())  # idle: block until a request arrives
+            if "UQT_TUNE_FILE" in os.environ:
+                _retune(be)
+            if LATE_ADMIT and handle is not None:
+                while (not handle[3].query()
+                       and time.perf_counter() - t_launch < step_s - LATE_LEAD_MS / 1000):
+                    time.sleep(0.001)
             t_a = time.perf_counter()
             # admission. Under load, hold new requests briefly so several share one packed prefill
             # (the prefill reads every weight once however many prompts it carries).
@@ -176,8 +210,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 batch.append((slot, p, max_frames, {"id": rid, "recv": req["_recv"], "admit": time.perf_counter()}))
             # the newest request takes the fast lane (run after the batched step is launched, below)
             # fast lane only while the GPU has slack: under load its concurrent work slows the batched step
-            fast_max = int(os.environ.get("UQT_FAST_MAX", "8"))
-            fast = batch.pop() if (fast_lane and batch and len(be.active()) <= fast_max) else None
+            fast = batch.pop() if (fast_lane and batch and len(be.active()) <= FAST_MAX) else None
             if batch:
                 be.admit_many(batch)
                 stats["admitted"] += len(batch)
@@ -192,8 +225,14 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             if handle is not None or be.active():
                 # under load, more frames per step: fewer host round trips and decode calls per second of audio
                 kc = K_HIGH if (K_HIGH and len(be.active()) >= K_HIGH_AT) else K
-                be.collect(handle) if handle is not None else be.generate(kc)
+                if handle is not None:
+                    be.collect(handle)
+                    dt = time.perf_counter() - t_launch
+                    step_s = dt if not step_s else 0.7 * step_s + 0.3 * dt
+                else:
+                    be.generate(kc)
                 handle = be.launch(kc) if be.active() else None
+                t_launch = time.perf_counter()
             frames = []
             if fast is not None:
                 slot, p, mf, meta = fast
@@ -269,7 +308,8 @@ def main():
     with torch.inference_mode():
         eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
         be = BatchEngine(eng, max_slots=args.max_slots, max_len=args.max_len)
-        be.warmup(Ks=(2, K_HIGH) if K_HIGH else (2,))
+        be.warmup(Ks=tuple(int(k) for k in os.environ.get("UQT_WARM_KS", "").split(",") if k)
+                  or ((2, K_HIGH) if K_HIGH else (2,)))
         wp = eng.build_prompt("custom", text="Warming up the fast lane for new requests.", language="English",
                               speaker="Ryan")
         eng.warmup(wp, Ks=(2,), max_bucket=min(1024, args.max_len), prefill_max=512)
