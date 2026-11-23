@@ -281,11 +281,13 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             t_d = time.perf_counter()
             n0 = getattr(be, "dec_calls", 0)
             firsts, launched = be.decode_launch(split_first=True)
-            if firsts:  # a stream's first chunk is never held back
-                _emit(be, be.decode_finish(firsts), cancelled, frames)
+            # the previous step's decodes go out first: a stream may have an older chunk there than the one
+            # in `firsts` (both ran on the decode stream, in this order, so this does not delay `firsts`)
             if pending_dec is not None:
                 _emit(be, be.decode_finish(pending_dec), cancelled, frames)
                 pending_dec = None
+            if firsts:  # a stream's first (or overdue) chunk is never held back
+                _emit(be, be.decode_finish(firsts), cancelled, frames)
             if len(be.active()) <= 16:
                 _emit(be, be.decode_finish(launched), cancelled, frames)
             else:
@@ -301,6 +303,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 stats["dec"] += t_s - t_d
                 stats["send"] += t_e - t_s
                 stats["dec_calls"] += getattr(be, "dec_calls", 0) - n0
+                stats["ooo"] = getattr(be, "out_of_order", 0)
                 stats["active"] += len(be.active())
                 stats["occupied"] = stats.get("occupied", 0) + sum(1 for it in be.info if it is not None)
                 stats["queued"] = stats.get("queued", 0) + q.qsize()

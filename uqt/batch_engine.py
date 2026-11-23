@@ -390,7 +390,7 @@ class BatchEngine:
         self._e_ev = torch.cuda.Event()
         self._e_ev.record(main)
         self.info[slot] = dict(pos=T + K0, frames=K0, dec_pos=R + K0, max_frames=max_frames, done=False,
-                               meta=meta, valid=k, dec=k, ci=1, t0=time.perf_counter())
+                               meta=meta, valid=k, dec=k, emitted=k, ci=1, t0=time.perf_counter())
         return b, False
 
     def release(self, slot: int):
@@ -544,7 +544,7 @@ class BatchEngine:
             if F == 0:
                 for s, _ in items:
                     self.info[s]["flushed"] = True
-                dst.append((None, None, [(s, 0, True) for s, _ in items], 0))
+                dst.append((None, None, [(s, 0, True, None) for s, _ in items], 0))
                 continue
             g = self._dec_graph(F)
             mb = self._dec_max_b(F)
@@ -560,8 +560,12 @@ class BatchEngine:
             if ev is not None:
                 ev.synchronize()
                 arr = host.numpy()
-            for i, (s, n, fin) in enumerate(items):
+            for i, (s, n, fin, start) in enumerate(items):
                 it = self.info[s]
+                if it is None or (start is not None and it.get("emitted", 0) != start):
+                    self.out_of_order = getattr(self, "out_of_order", 0) + 1  # must stay 0: audio would be scrambled
+                elif start is not None:
+                    it["emitted"] = start + n
                 if it is not None and n and it["dec"] > 0 and it.get("t0") is None:
                     it["t0"] = time.perf_counter()  # the client's playback clock starts here
                 b = arr[i, :n * up].tobytes() if (ev is not None and n) else None
@@ -587,13 +591,14 @@ class BatchEngine:
         res = []
         for s, n in items:
             it = self.info[s]
+            start = it["dec"]
             it["dec"] += n
             it["dec_pos"] += F
             it["ci"] += 1
             fin = it["done"] and it["dec"] >= it["valid"]
             if fin:
                 it["flushed"] = True
-            res.append((s, n, fin))
+            res.append((s, n, fin, start))
         return (host, ev, res, F)
 
     def decode(self, slots, chunk, valid):

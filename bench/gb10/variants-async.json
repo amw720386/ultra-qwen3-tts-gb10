@@ -17,15 +17,6 @@
   "ASYNC_H2D": 1,
   "TRIM_MAX_MS": 0
  },
- "async_dl": {
-  "DEADLINE": 1,
-  "LATE_ADMIT": 0,
-  "FAST_MAX": 8,
-  "K_HIGH": 0,
-  "K_HIGH_AT": 160,
-  "ASYNC_H2D": 1,
-  "TRIM_MAX_MS": 0
- },
  "async_dl_late": {
   "DEADLINE": 1,
   "LATE_ADMIT": 1,

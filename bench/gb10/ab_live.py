@@ -55,7 +55,7 @@ def main():
                     print("ab", json.dumps({k: (round(v, 3) if isinstance(v, float) else v) for k, v in rows[-1].items()
                                             if k in ("round", "variant", "C", "n_ok", "n", "throughput_audio_s_per_s",
                                                      "ttfa_ms_p50", "ttfa_ms_p90", "heard_ms_p50", "rtf_p50",
-                                                     "underrun_frac", "late_ms_p50", "late_ms_p90")}), flush=True)
+                                                     "underrun_frac", "late_ms_p50", "late_ms_p90", "late_gt50ms_frac")}), flush=True)
     finally:
         for p in procs[::-1]:
             p.terminate()
