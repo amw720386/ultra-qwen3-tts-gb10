@@ -47,7 +47,7 @@ class BatchEngine:
         nl, D, V = len(T.L), eng.t_emb.shape[1], eng.V
         self.dev, self.dt, self.D, self.V = dev, dt, D, V
         # KV cache format (UQT_KV): bf16; int8 = per-(token, head) absmax-scaled int8, half the attention
-        # reads at large batch; fp8 = plain e4m3 (kept for comparison: garbles some utterances, see kernels.py)
+        # reads at large batch; fp8 = plain e4m3 (kept for comparison)
         self.kv = os.environ.get("UQT_KV", "int8")
         self.kv_dt = {"bf16": dt, "fp8": torch.float8_e4m3fn, "int8": torch.int8}[self.kv]
         self.kc = torch.zeros(nl, max_slots, T.nkv, max_len, T.hd, device=dev, dtype=self.kv_dt)

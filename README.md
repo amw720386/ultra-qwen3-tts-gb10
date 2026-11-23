@@ -88,13 +88,15 @@ than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8
 - **INT8 KV cache for the batched engine** (`UQT_KV=int8`, default): every (token, kv head) row of
   K and V is stored as int8 with its own fp32 absmax scale, quantized inside the cache-write kernel;
   the attention kernel converts int8 to bf16 exactly and applies the scales to the logits (K) and to
-  the probabilities (V). At 128-256 streams reading the cache is about half of each talker step and
-  runs at the bandwidth limit, so halving its bytes makes decode attention 1.75-1.85x faster and the
-  server +9% at 256 clients. Plain e4m3 (`UQT_KV=fp8`) was faster still but garbled 5 of 300
-  batched clips (the talker's keys reach |k| ~ 270, where e4m3's 3-bit mantissa moves attention
-  logits by whole units); per-row int8 has a quarter of its error (`results/gb10/kv8_micro.json`).
-  Batched 300-clip WER at 256 slots, hybrid weights: BF16 cache 3.01% (2 catastrophic), INT8 2.32%
-  (1), FP8 3.59% (5).
+  the probabilities (V). It halves the cache bytes read, and the attention kernel alone is 1.7-1.8x
+  faster than BF16 at 128-256 streams (2.7x at 64 streams x 200 tokens, where the smaller cache
+  fits in L2; `results/gb10/kv8_micro.json`, synthetic Gaussian keys). The server measured 174.0
+  audio-s/s at 256 clients in one run; BF16-cache runs on the same box gave 151.0, 161.0 and 159.9,
+  and loads up to 128 clients are unchanged within noise. Plain e4m3 is available as `UQT_KV=fp8`.
+  Batched 300-clip WER at 256 slots, hybrid weights, one seed each: BF16 3.01% (2 clips over 50%
+  errors), INT8 2.32% (1), FP8 3.59% (5); excluding those clips 2.37%, 2.02% and 2.02%. One seed
+  does not separate the three formats, and the rounding error of each on the real cache has not
+  been measured yet (`bench/gb10/kv_real_error.py`).
 - **Single-launch K/V cache writes** for the batched step (`kernels.kv_write_rows`).
 - **Tuned implicit-GEMM tiles**: tile shapes per decoder width (including the 768-wide units),
   swept on GB10 at the shapes the batched engine runs.

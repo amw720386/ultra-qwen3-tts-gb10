@@ -265,9 +265,8 @@ def _(q, kc, vc, pos, scale):
 
 
 # ----------------------------------------------------------------------------- INT8 KV cache (UQT_KV=int8)
-# Each (token, kv head) row of K and V is stored as int8 with its own fp32 absmax scale. Half the bytes of
-# a BF16 cache, and ~0.5% rounding error per row against ~2.6% for plain e4m3: the talker's keys reach
-# |x| ~ 270, so e4m3 error on K shifts attention logits by several units and garbles some utterances.
+# Each (token, kv head) row of K and V is stored as int8 with its own fp32 absmax scale: half the bytes of
+# a BF16 cache. Rounding error per format on the real cache: bench/gb10/kv_real_error.py.
 
 def quant_rows(x: torch.Tensor):
     """x [..., D] -> (int8 [..., D], fp32 scale [...]) with per-row absmax scaling."""

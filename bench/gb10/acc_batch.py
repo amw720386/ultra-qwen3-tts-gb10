@@ -21,6 +21,7 @@ def main():
     ap.add_argument("--weights", default="fp8")
     ap.add_argument("--manifest", default="/root/manifest.json")
     ap.add_argument("--out", default="/root/results/acc_batch")
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--eval-only", action="store_true", help="re-score wavs already in the output dir")
     args = ap.parse_args()
     from qwen_tts import Qwen3TTSModel
@@ -33,7 +34,7 @@ def main():
     d = f"{args.out}/{args.weights}-S{args.slots}"
     os.makedirs(d, exist_ok=True)
     torch.set_grad_enabled(False)
-    torch.manual_seed(0)
+    torch.manual_seed(args.seed)
     if not args.eval_only:
         tts = Qwen3TTSModel.from_pretrained("Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice", device_map="cuda:0",
                                             dtype=torch.bfloat16, attn_implementation="sdpa")
@@ -80,7 +81,8 @@ def main():
     summ = {"slots": args.slots, "weights": args.weights, "n": r["n_eval"], "wer_corpus": r["wer_corpus"],
             "catastrophic": len(bad), "wer_excl_catastrophic": tot_e / max(tot_n, 1)}
     json.dump({"summary": summ, **r}, open(f"{d}/eval.json", "w"), indent=1)
-    json.dump(summ, open(f"/root/results/acc_batch-{args.weights}-S{args.slots}.json", "w"), indent=1)
+    summ.update(kv=os.environ.get("UQT_KV", "default"), seed=args.seed)
+    json.dump(summ, open(f"{args.out}-summary.json", "w"), indent=1)  # one file per run directory
     print("eval", json.dumps(summ), flush=True)
 
 
