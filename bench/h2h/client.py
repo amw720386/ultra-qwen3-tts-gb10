@@ -86,6 +86,17 @@ async def _one(client, url, payload, extra_headers=None):
         worst = max(worst, late)
         acc += (len(c) // 2) / SR
     rec["max_late_ms"] = worst * 1000
+    if v is not None:
+        # when a listener hears the voice: playback starts at the first byte, plays the leading silence in
+        # real time and stalls whenever a chunk is late. (ttfa_voiced_ms only says when the voiced sample
+        # arrived, so a large first chunk that holds silence and voice together looks earlier than it sounds.)
+        acc, stall = 0, 0.0
+        for t, c in chunks:
+            stall = max(stall, t - t_first - acc / SR)
+            acc += len(c) // 2
+            if acc > v:
+                break
+        rec["heard_ms"] = (t_first - t0 + stall + v / SR) * 1000
     rec["first_chunk_ms"] = 1000 * len(chunks[0][1]) // 2 / SR
     if late_from is not None:
         rec["first_late_at_s"] = late_from
@@ -106,6 +117,7 @@ def _summ(recs):
         "rtf_p50": _pct(g("rtf"), 50), "rtf_p90": _pct(g("rtf"), 90),
         "total_rtf_p50": _pct(g("total_rtf"), 50),
         "underrun_frac": sum(1 for r in ok if r.get("max_late_ms", 0) > 0) / max(len(ok), 1),
+        "heard_ms_p50": _pct(g("heard_ms"), 50), "heard_ms_p90": _pct(g("heard_ms"), 90),
         # max_late_ms is the client buffer that would have hidden every gap of the request
         "late_ms_p50": _pct(g("max_late_ms"), 50), "late_ms_p90": _pct(g("max_late_ms"), 90),
         "late_ms_p99": _pct(g("max_late_ms"), 99), "late_ms_max": max(g("max_late_ms"), default=None),
