@@ -88,7 +88,7 @@ than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8
 - **INT8 KV cache for the batched engine** (`UQT_KV=int8`, default): every (token, kv head) row of
   K and V is stored as int8 with its own fp32 absmax scale, quantized inside the cache-write kernel;
   the attention kernel converts int8 to bf16 exactly and applies the scales to the logits (K) and to
-  the probabilities (V). It halves the cache bytes read, and the attention kernel alone is 1.7-1.8x
+  the probabilities (V). It halves the cache bytes read, and the attention kernel alone is 1.6-1.8x
   faster than BF16 at 128-256 streams (2.7x at 64 streams x 200 tokens, where the smaller cache
   fits in L2; `results/gb10/kv8_micro.json`, synthetic Gaussian keys). The server measured 174.0
   audio-s/s at 256 clients in one run; BF16-cache runs on the same box gave 151.0, 161.0 and 159.9,
@@ -116,7 +116,8 @@ Single stream:
 
 Accuracy (300 clips, Whisper large-v3 WER, excluding catastrophic failures): bf16 2.82%, FP8 1.70%,
 hybrid FP8 + FP4 2.05% (one catastrophic failure in each of FP8 and hybrid).
-The difference is within seed noise: FP8 loses no accuracy.
+One seed each: no FP8 loss is visible here, but the run-to-run spread was not measured, so this
+does not rank the three.
 
 Batched engine throughput (audio seconds generated per second, engine only):
 
