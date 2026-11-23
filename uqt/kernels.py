@@ -109,8 +109,9 @@ def _kv_write_rows_kernel(kc_ptr, vc_ptr, k_ptr, v_ptr, pos_ptr, layer, S, T, H:
     lb = (layer * S + b).to(tl.int64)  # cache is > 2^31 elements: index in int64
     dst = ((lb * H + h) * T + p) * D + d
     src = (b * H + h) * D + d
-    tl.store(kc_ptr + dst, tl.load(k_ptr + src))
-    tl.store(vc_ptr + dst, tl.load(v_ptr + src))
+    # the cache may be FP8 (UQT_KV_FP8): cast on store
+    tl.store(kc_ptr + dst, tl.load(k_ptr + src).to(kc_ptr.dtype.element_ty))
+    tl.store(vc_ptr + dst, tl.load(v_ptr + src).to(vc_ptr.dtype.element_ty))
 
 
 @kv_write_rows.register_fake
@@ -219,15 +220,15 @@ def _bdec_attn_dot_kernel(q_ptr, kc_ptr, vc_ptr, pos_ptr, o_ptr, scale, sk_b, sk
     for t0 in range(0, pos + 1, BLK):
         t = t0 + tl.arange(0, BLK)
         tm = t <= pos
-        k = tl.load(kc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0)
+        k = tl.load(kc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0).to(q.dtype)
         s = tl.dot(q, tl.trans(k)) * scale  # [GP, BLK]
         s = tl.where(tm[None, :], s, float("-inf"))
         m_new = tl.maximum(m, tl.max(s, axis=1))
         p = tl.exp(s - m_new[:, None])
         alpha = tl.exp(m - m_new)
         l = l * alpha + tl.sum(p, axis=1)
-        v = tl.load(vc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0)
-        acc = acc * alpha[:, None] + tl.dot(p.to(v.dtype), v)
+        v = tl.load(vc_ptr + base + t[:, None] * sk_t + d[None, :], mask=tm[:, None], other=0.0).to(q.dtype)
+        acc = acc * alpha[:, None] + tl.dot(p.to(q.dtype), v)
         m = m_new
     out = acc / l[:, None]
     tl.store(o_ptr + b * H * HD + (kvh * G + gi)[:, None] * HD + d[None, :], out.to(o_ptr.dtype.element_ty),

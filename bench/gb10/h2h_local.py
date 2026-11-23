@@ -32,7 +32,7 @@ def main():
     procs = []
     if args.system == "uqt":
         sock = "/tmp/uqt.sock"
-        env = dict(os.environ, UQT_STATS="0", UQT_NO_PDL="1")
+        env = dict(os.environ, UQT_STATS=os.environ.get("UQT_STATS", "0"), UQT_NO_PDL="1")
         procs.append(subprocess.Popen([sys.executable, "-m", "uqt.engine_proc", "--sock", sock, "--max-slots",
                                        str(args.max_slots), "--max-len", "512", "--weights", args.weights],
                                       env=env))

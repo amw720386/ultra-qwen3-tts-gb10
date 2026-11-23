@@ -46,7 +46,9 @@ class BatchEngine:
         assert max_len <= eng.max_len
         nl, D, V = len(T.L), eng.t_emb.shape[1], eng.V
         self.dev, self.dt, self.D, self.V = dev, dt, D, V
-        self.kc = torch.zeros(nl, max_slots, T.nkv, max_len, T.hd, device=dev, dtype=dt)
+        # UQT_KV_FP8=1: e4m3 KV cache (half the attention reads at large batch, where they dominate)
+        self.kv_dt = torch.float8_e4m3fn if os.environ.get("UQT_KV_FP8", "0") == "1" else dt
+        self.kc = torch.zeros(nl, max_slots, T.nkv, max_len, T.hd, device=dev, dtype=self.kv_dt)
         self.vc = torch.zeros_like(self.kc)
         self.code0 = torch.zeros(max_slots, dtype=torch.long, device=dev)
         self.hidden = torch.zeros(max_slots, D, device=dev, dtype=dt)
@@ -65,7 +67,6 @@ class BatchEngine:
             self.fcp.quantize(eng.weights)
         self.fcp_u = torch.empty(max_slots, 15, cp.config.vocab_size, device=dev, dtype=torch.float32)
         self.t_u = torch.empty(max_slots, V, device=dev, dtype=torch.float32)
-        import os
         self.battn = os.environ.get("UQT_BATTN", "1") == "1"
         self._btalker_c = torch.compile(self._btalker, fullgraph=True, dynamic=True)
         self.graphs: dict = {}
