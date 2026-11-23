@@ -90,7 +90,7 @@ def _tail(path, n=80):
 
 
 @app.function(image=img, gpu=GPU, volumes=VOLS, timeout=5400, cpu=16.0, memory=65536)
-def run(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
+def run(backend: str = "cutedsl", quick: bool = False, tag: str = "", wer: int = 0):
     sys.path.insert(0, "/root/h2h")
     import httpx
     import numpy as np
@@ -145,7 +145,7 @@ def run(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
         assert body[:4] != b"RIFF", "got a WAV header, expected raw pcm"
 
         man = json.load(open("/data/manifest.json"))
-        n_lat = 6 if quick else 60
+        n_lat = wer or (6 if quick else 60)  # wer: only generate the first `wer` clips for scoring
         lat_texts = [m["target_text"] for m in man[:n_lat]]
         lat_ids = [m["id"] for m in man[:n_lat]]
         all_texts = [m["target_text"] for m in man]
@@ -155,7 +155,7 @@ def run(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
         # extra warmup beyond the server's own startup warmup: sequential + batched shapes (discarded)
         t_w = time.time()
         latency(url, make_payload, all_texts[100:110], warmup=0)
-        if not quick:
+        if not quick and not wer:
             load(url, make_payload, all_texts[110:], concs=(16, 64, 128), reqs_per_client=1)
         print(f"warmup {time.time() - t_w:.0f}s", flush=True)
 
@@ -171,6 +171,8 @@ def run(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
         sanity["ok"] = bool(sanity["dur_s"] > 0.15 * sanity["words"] and sanity["rms_dbfs"] > -45)
         print("sanity:", sanity, flush=True)
 
+        if wer:
+            return {"out_dir": out_dir, "latency": lat, "sanity": sanity, "versions": _versions()}
         ld = load(url, make_payload, all_texts, concs=concs, reqs_per_client=4)
         res = {
             "system": "sglang-omni", "model": MODEL, "backend": backend, "quick": quick, "tag": tag,
@@ -208,7 +210,12 @@ def _safe(fn):
 
 
 @app.local_entrypoint()
-def main(backend: str = "cutedsl", quick: bool = False, tag: str = ""):
+def main(backend: str = "cutedsl", quick: bool = False, tag: str = "", wer: int = 0, runs: int = 1):
+    if wer:
+        for c in [run.spawn(backend=backend, tag=f"{tag or 'wer'}{i + 1}", wer=wer) for i in range(runs)]:
+            o = c.get()
+            print(o["out_dir"], json.dumps(o["latency"]["summary"]), o["sanity"])
+        return
     res = run.remote(backend=backend, quick=quick, tag=tag)
     os.makedirs("results/h100/h2h", exist_ok=True)
     name = "sglang-omni" + ("-quick" if quick else "") + ("" if backend == "cutedsl" else f"-{backend}") + (f"-{tag}" if tag else "")
