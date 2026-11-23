@@ -161,10 +161,11 @@ the first non-silent audio (p50, ms).
 
 Cells: throughput / TTFA p50 / voiced TTFA p50. Voiced TTFA is when the chunk holding the first
 voiced sample arrives, not when a listener hears it: our clips open with about 90 ms of near-silence
-(median of 300), which plays in real time after the first byte. Counting it, uqt's voice is heard at
-roughly 240 ms at 32 clients and 290 ms at 64, and sglang-omni's, which sends that silence in an
-earlier small chunk, at an estimated 195-250 ms; the voiced column therefore does not show a uqt lead
-over sglang-omni at 32-64 clients. `bench/h2h/client.py` now records `heard_ms`; the tables have not
+(median of 300), which plays in real time after the first byte. uqt's and
+vLLM-Omni's clips do this (90 ms median of 40 each); sglang-omni's start almost at once (10 ms). uqt's
+voice is therefore heard at roughly 240 ms at 32 clients and 290 ms at 64, against about 195 and
+250 ms for sglang-omni, so the voiced column does not show a uqt lead over it at 32-64 clients.
+`bench/h2h/client.py` now records `heard_ms`; the tables have not
 been rerun with it. uqt completed every request at every load.
 Each row is one run, all on the same first GB10; the three-run spread at 256 clients on the second
 GB10 is above, and single runs there differ by up to 20%, so treat the 256 row as approximate.
