@@ -24,6 +24,8 @@ def main():
     ap.add_argument("--reqs", type=int, default=3)
     ap.add_argument("--manifest", default="/root/manifest.json")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--swer", default="", help="after the rounds: variant names to score through the server, comma list")
+    ap.add_argument("--swer-concs", default="128,256")
     args = ap.parse_args()
     variants = json.load(open(args.variants))
     tune = "/tmp/uqt-tune.json"
@@ -56,6 +58,13 @@ def main():
                                             if k in ("round", "variant", "C", "n_ok", "n", "throughput_audio_s_per_s",
                                                      "ttfa_ms_p50", "ttfa_ms_p90", "heard_ms_p50", "rtf_p50",
                                                      "underrun_frac", "late_ms_p50", "late_ms_p90", "late_gt50ms_frac")}), flush=True)
+        for n in (x for x in args.swer.split(",") if x):
+            json.dump(variants[n], open(tune, "w"))
+            time.sleep(1.0)
+            load(url, make, texts, concs=(1,), reqs_per_client=1)
+            for c in args.swer_concs.split(","):
+                subprocess.run([sys.executable, "-m", "bench.gb10.server_wer", "--conc", c,
+                                "--out", f"/root/results/swer-{n}-c{c}"], check=False)
     finally:
         for p in procs[::-1]:
             p.terminate()

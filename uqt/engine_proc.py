@@ -141,7 +141,7 @@ ADMIT_WAIT_MS = float(os.environ.get("UQT_ADMIT_WAIT_MS", "60"))
 FAST_MAX = int(os.environ.get("UQT_FAST_MAX", "8"))
 # Admit as late as possible: hold admission until the step in flight is about LATE_LEAD_MS from done, so
 # requests that arrive while it runs join the next step instead of the one after (0: admit at once).
-LATE_ADMIT = int(os.environ.get("UQT_LATE_ADMIT", "0"))
+LATE_ADMIT = int(os.environ.get("UQT_LATE_ADMIT", "1"))
 LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
 # Drop the model's leading near-silence (about 90 ms) from the start of a stream, so the first byte a
 # client plays is the voice. Keeps 10 ms before it and never drops more than TRIM_MAX_MS (0: off).

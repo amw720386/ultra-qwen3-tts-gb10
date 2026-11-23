@@ -477,7 +477,7 @@ class BatchEngine:
     # (RTF 0.5): a chunk is only sent when it is full, so a 16-frame chunk arrives 16 frames of generation
     # time after the one before. With DEADLINE a stream's pending frames go out early, undeferred if need
     # be, when its estimated buffer is about to run out. Costs more, smaller decode calls under load.
-    DEADLINE = int(os.environ.get("UQT_DEADLINE", "0"))
+    DEADLINE = int(os.environ.get("UQT_DEADLINE", "1"))
     DEADLINE_MARGIN_MS = float(os.environ.get("UQT_DEADLINE_MARGIN_MS", "20"))
     # streams x frames per codec call: the late codec layers launch (rows / 32) blocks on one grid axis,
     # which must stay below 65535 (rows = streams * frames * 1920 samples)

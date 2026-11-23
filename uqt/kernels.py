@@ -15,8 +15,8 @@ import triton
 import triton.language as tl
 
 # torch.tensor(list, device=cuda) is a blocking copy: it waits for everything queued on the stream, so a
-# launch meant to overlap with host work stalls until the step it just launched is done. Off until proven.
-ASYNC_H2D = [int(os.environ.get("UQT_ASYNC_H2D", "0"))]
+# launch meant to overlap with host work stalls until the step it just launched is done.
+ASYNC_H2D = [int(os.environ.get("UQT_ASYNC_H2D", "1"))]
 
 
 def h2d(data, dev, dtype=None):
