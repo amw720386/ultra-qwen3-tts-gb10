@@ -390,7 +390,7 @@ class BatchEngine:
         self._e_ev = torch.cuda.Event()
         self._e_ev.record(main)
         self.info[slot] = dict(pos=T + K0, frames=K0, dec_pos=R + K0, max_frames=max_frames, done=False,
-                               meta=meta, valid=k, dec=k, ci=1)
+                               meta=meta, valid=k, dec=k, ci=1, t0=time.perf_counter())
         return b, False
 
     def release(self, slot: int):
@@ -469,6 +469,12 @@ class BatchEngine:
     #      decode call, so the codec runs far fewer, larger batches per second of audio.
     EARLY_CHUNKS = int(os.environ.get("UQT_EARLY_CHUNKS", "1"))  # 2 cut underruns at 64 clients (12% -> 4%) but not at 128+
     RAMP = (2, 2, 4, 8, 16)  # a second small chunk builds the playback buffer before chunks grow
+    # Chunks that double run the client's buffer dry once generation needs more than half of real time
+    # (RTF 0.5): a chunk is only sent when it is full, so a 16-frame chunk arrives 16 frames of generation
+    # time after the one before. With DEADLINE a stream's pending frames go out early, undeferred if need
+    # be, when its estimated buffer is about to run out. Costs more, smaller decode calls under load.
+    DEADLINE = int(os.environ.get("UQT_DEADLINE", "0"))
+    DEADLINE_MARGIN_MS = float(os.environ.get("UQT_DEADLINE_MARGIN_MS", "20"))
     # streams x frames per codec call: the late codec layers launch (rows / 32) blocks on one grid axis,
     # which must stay below 65535 (rows = streams * frames * 1920 samples)
     DEC_FRAME_BUDGET = 1024
@@ -497,10 +503,22 @@ class BatchEngine:
         copied asynchronously into pinned host memory. Bookkeeping advances at launch time.
         Returns a handle for decode_finish()."""
         groups = {}
+        now = time.perf_counter()
+        dt = now - getattr(self, "_t_launch", now)
+        self._t_launch = now
+        if 0 < dt < 1.0:  # seconds per scheduler iteration
+            self._iter_s = dt if not getattr(self, "_iter_s", 0) else 0.8 * self._iter_s + 0.2 * dt
+        step = getattr(self, "_iter_s", 0.0)
+        margin = self.DEADLINE_MARGIN_MS / 1000
         for s, it in enumerate(self.info):
             if it is None or it.get("flushed"):
                 continue
             pend = it["valid"] - it["dec"]
+            slack = None  # seconds until the client's buffer runs dry
+            if self.DEADLINE and it.get("t0") is not None:
+                slack = it["dec"] * self.sdec.spf / 24000 - (now - it["t0"])
+                if slack < -0.25:  # far behind real time: the gap is unavoidable, keep decode calls large
+                    slack = None
             if pend <= 0:
                 if it["done"]:
                     groups.setdefault((0, False), []).append((s, 0))
@@ -508,7 +526,9 @@ class BatchEngine:
             target = self.RAMP[min(it["ci"], len(self.RAMP) - 1)]
             # the first EARLY_CHUNKS chunks of a stream are never held back by the caller: they build the
             # client's playback buffer, and a late second chunk is an audible gap
-            first = split_first and it["ci"] < self.EARLY_CHUNKS
+            first = split_first and (it["ci"] < self.EARLY_CHUNKS or (slack is not None and slack < step + margin))
+            if slack is not None and 2 <= pend < target and slack < 2 * step + margin:
+                target = max(f for f in self.RAMP if f <= pend)  # cannot wait for a full chunk
             if pend >= target:
                 groups.setdefault((target, first), []).append((s, target))
             elif it["done"]:
@@ -537,6 +557,9 @@ class BatchEngine:
                 ev.synchronize()
                 arr = host.numpy()
             for i, (s, n, fin) in enumerate(items):
+                it = self.info[s]
+                if it is not None and n and it["dec"] > 0 and it.get("t0") is None:
+                    it["t0"] = time.perf_counter()  # the client's playback clock starts here
                 b = arr[i, :n * up].tobytes() if (ev is not None and n) else None
                 out.append((s, b, fin))
         return out

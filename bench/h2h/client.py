@@ -78,11 +78,17 @@ async def _one(client, url, payload, extra_headers=None):
                 break
     rec["rtf"] = (t_end - t_first) / dur
     rec["total_rtf"] = (t_end - t0) / dur
-    acc, worst = 0.0, -1e9
+    acc, worst, late_from = 0.0, -1e9, None
     for t, c in chunks:
-        worst = max(worst, t - (t_first + acc))
+        late = t - (t_first + acc)
+        if late > 0 and late_from is None:
+            late_from = acc  # audio seconds already received when playback first ran dry
+        worst = max(worst, late)
         acc += (len(c) // 2) / SR
     rec["max_late_ms"] = worst * 1000
+    rec["first_chunk_ms"] = 1000 * len(chunks[0][1]) // 2 / SR
+    if late_from is not None:
+        rec["first_late_at_s"] = late_from
     return rec, pcm
 
 
@@ -100,6 +106,12 @@ def _summ(recs):
         "rtf_p50": _pct(g("rtf"), 50), "rtf_p90": _pct(g("rtf"), 90),
         "total_rtf_p50": _pct(g("total_rtf"), 50),
         "underrun_frac": sum(1 for r in ok if r.get("max_late_ms", 0) > 0) / max(len(ok), 1),
+        # max_late_ms is the client buffer that would have hidden every gap of the request
+        "late_ms_p50": _pct(g("max_late_ms"), 50), "late_ms_p90": _pct(g("max_late_ms"), 90),
+        "late_ms_p99": _pct(g("max_late_ms"), 99), "late_ms_max": max(g("max_late_ms"), default=None),
+        "first_late_at_s_p50": _pct(g("first_late_at_s"), 50), "first_late_at_s_p90": _pct(g("first_late_at_s"), 90),
+        "first_chunk_ms_p50": _pct(g("first_chunk_ms"), 50),
+        **{f"late_gt{x}ms_frac": sum(1 for v in g("max_late_ms") if v > x) / max(len(ok), 1) for x in (20, 50, 100, 200, 500)},
         "hdr_ms_p50": _pct(g("hdr_ms"), 50), "hdr_ms_p90": _pct(g("hdr_ms"), 90),
     }
 
