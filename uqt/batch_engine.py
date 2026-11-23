@@ -516,7 +516,7 @@ class BatchEngine:
             pend = it["valid"] - it["dec"]
             slack = None  # seconds until the client's buffer runs dry
             if self.DEADLINE and it.get("t0") is not None:
-                slack = it["dec"] * self.sdec.spf / 24000 - (now - it["t0"])
+                slack = it["dec"] * self.sdec.spf / 24000 - it.get("trim_s", 0.0) - (now - it["t0"])
                 if slack < -0.25:  # far behind real time: the gap is unavoidable, keep decode calls large
                     slack = None
             if pend <= 0:

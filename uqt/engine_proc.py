@@ -38,6 +38,21 @@ def _pcm(w):
 HOPS = {"recv_to_admit": [], "admit_to_first": []}
 
 
+def _trim_lead(b, it):
+    """Leading-silence trim of a stream's first chunk; returns the bytes to send."""
+    x = np.frombuffer(b, dtype=np.int16).astype(np.float32)
+    w = 240  # 10 ms
+    n = min(len(x), int(TRIM_MAX_MS * 24)) // w
+    if not n:
+        return b
+    rms = np.sqrt(np.mean(x[:n * w].reshape(n, w) ** 2, axis=1)) / 32768.0
+    hit = np.flatnonzero(rms >= 0.01)
+    k = max(0, int(hit[0]) - 1) if len(hit) else n - 1  # silent so far: keep the last window
+    if it is not None:
+        it["trim_s"] = k * w / 24000
+    return b[2 * k * w:]
+
+
 def _emit(be, outs, cancelled, frames):
     """Append AUDIO/END frames for finished decodes; release flushed slots."""
     for s, b, fin in outs:
@@ -47,6 +62,9 @@ def _emit(be, outs, cancelled, frames):
             meta["first"] = time.perf_counter()
             HOPS["recv_to_admit"].append(meta["admit"] - meta["recv"])
             HOPS["admit_to_first"].append(meta["first"] - meta["admit"])
+        if b and TRIM_MAX_MS and not meta.get("trimmed"):
+            meta["trimmed"] = True
+            b = _trim_lead(b, be.info[s])
         if b and rid not in cancelled:
             frames.append(HDR.pack(AUDIO, rid, len(b)))
             frames.append(b)
@@ -125,7 +143,10 @@ FAST_MAX = int(os.environ.get("UQT_FAST_MAX", "8"))
 # requests that arrive while it runs join the next step instead of the one after (0: admit at once).
 LATE_ADMIT = int(os.environ.get("UQT_LATE_ADMIT", "0"))
 LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
-TUNE = ("K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+# Drop the model's leading near-silence (about 90 ms) from the start of a stream, so the first byte a
+# client plays is the voice. Keeps 10 ms before it and never drops more than TRIM_MAX_MS (0: off).
+TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "0"))
+TUNE = ("TRIM_MAX_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
 
@@ -244,6 +265,9 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 meta["first"] = time.perf_counter()
                 HOPS["recv_to_admit"].append(meta["admit"] - meta["recv"])
                 HOPS["admit_to_first"].append(meta["first"] - meta["admit"])
+                if b and TRIM_MAX_MS:
+                    meta["trimmed"] = True
+                    b = _trim_lead(b, be.info[slot])
                 if b:
                     frames += [HDR.pack(AUDIO, rid, len(b)), b]
                 if fin:
