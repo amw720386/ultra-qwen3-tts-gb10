@@ -45,7 +45,8 @@ profilers and microbenchmarks are in `bench/gb10/`; measured outputs are in `res
 Switches: `--weights bf16|fp8` selects the weight format; `UQT_BATTN=0` turns off batched decode
 attention; `UQT_RES_UNIT=0`, `UQT_FUSED_TRANS=0` and `UQT_MM_RES=0` disable individual fused codec
 kernels for A/B comparisons; `UQT_FP8_BIG=0` keeps bf16 weights above 128 rows; `UQT_KV_TRITON=0`
-uses indexed assignment for cache writes.
+uses indexed assignment for cache writes; `UQT_KV=bf16|int8|fp8` selects the batched KV cache format
+(default int8).
 
 Server experiments kept as opt-in switches (measured on GB10, no throughput gain at 1-256 clients):
 `UQT_K_HIGH=4` (4-frame steps under load), `UQT_ADMIT_MIN=4` (batch admissions under load),
@@ -84,6 +85,16 @@ than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8
 - **Tensor-core decode attention** (`UQT_BATTN_KIND=dot`, default; ported from the H100 backport):
   the two query heads of each kv head padded to 16 rows and attended with `tl.dot`, +1-3% engine
   throughput on GB10 (`UQT_BATTN_KIND=fma` restores the CUDA-core kernel).
+- **INT8 KV cache for the batched engine** (`UQT_KV=int8`, default): every (token, kv head) row of
+  K and V is stored as int8 with its own fp32 absmax scale, quantized inside the cache-write kernel;
+  the attention kernel converts int8 to bf16 exactly and applies the scales to the logits (K) and to
+  the probabilities (V). At 128-256 streams reading the cache is about half of each talker step and
+  runs at the bandwidth limit, so halving its bytes makes decode attention 1.75-1.85x faster and the
+  server +9% at 256 clients. Plain e4m3 (`UQT_KV=fp8`) was faster still but garbled 5 of 300
+  batched clips (the talker's keys reach |k| ~ 270, where e4m3's 3-bit mantissa moves attention
+  logits by whole units); per-row int8 has a quarter of its error (`results/gb10/kv8_micro.json`).
+  Batched 300-clip WER at 256 slots, hybrid weights: BF16 cache 3.01% (2 catastrophic), INT8 2.32%
+  (1), FP8 3.59% (5).
 - **Single-launch K/V cache writes** for the batched step (`kernels.kv_write_rows`).
 - **Tuned implicit-GEMM tiles**: tile shapes per decoder width (including the 768-wide units),
   swept on GB10 at the shapes the batched engine runs.
@@ -130,19 +141,19 @@ same multi-process client (`bench/gb10/h2h_local.py`), one server at a time. Eac
 requests back to back. Throughput in audio-s/s; TTFA = time to first audio byte, voiced = time to
 the first non-silent audio (p50, ms).
 
-| Clients | uqt (engine process + Go gateway, FP8) | vLLM-Omni 0.32 (2-stage default) | sglang-omni 0.2 |
+| Clients | uqt (engine process + Go gateway; hybrid weights, INT8 KV) | vLLM-Omni 0.32 (2-stage default) | sglang-omni 0.2 |
 |---|---|---|---|
-| 1 | **5.4** / 41 / 41 | 2.4 / 60 / 858 | 2.6 / 78 / 78 |
-| 8 | **26.7** / 106 / 106 | 13.1 / 109 / 1035 | 17.1 / 106 / 106 |
-| 32 | **69.8** / 161 / 161 | 27.2 / 162 / 1857 | 39.3 / 93 / 195 |
-| 64 | **99.3** / 216 / 216 | 36.0 / 261 / 3154 | 61.5 / 103 / 248 |
-| 128 | **124.9** / 351 / 352 | 40.8 / 10090 / 13124 | 69.3 / 5280 / 5410 (15 of 384 failed) |
-| 256 | **166.9** / 556 / 558 | 41.7 / 31965 / 34979 | 72.2 / 5030 / 5158 (410 of 768 failed) |
+| 1 | **8.1** / 31 / 31 | 2.4 / 60 / 858 | 2.6 / 78 / 78 |
+| 8 | **25.8** / 91 / 91 | 13.1 / 109 / 1035 | 17.1 / 106 / 106 |
+| 32 | **78.9** / 153 / 153 | 27.2 / 162 / 1857 | 39.3 / 93 / 195 |
+| 64 | **101.9** / 201 / 201 | 36.0 / 261 / 3154 | 61.5 / 103 / 248 |
+| 128 | **130.6** / 332 / 332 | 40.8 / 10090 / 13124 | 69.3 / 5280 / 5410 (15 of 384 failed) |
+| 256 | **174.0** / 521 / 522 | 41.7 / 31965 / 34979 | 72.2 / 5030 / 5158 (410 of 768 failed) |
 
 Cells: throughput / TTFA p50 / voiced TTFA p50. uqt completed every request at every load.
-With hybrid FP8 + FP4 weights (now the server default) uqt measures 8.0 / 32 / 32 at 1 client and
-27.6 / 91 / 91 at 8 clients; 32-256 clients are within run-to-run spread of the FP8 row
-(`results/gb10/h2h-uqt-hyb.json`).
+Earlier uqt configurations on the same harness: FP8 weights with a BF16 cache measured 5.4 / 41 / 41
+at 1 client and 166.9 / 556 / 558 at 256 (`results/gb10/h2h-uqt.json`); hybrid weights with a BF16
+cache 8.1 / 31 / 31 and 159.9 / 560 / 560 (`results/gb10/h2h-uqt-hyb-kvwrite.json`).
 Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
 for an sglang-omni Triton kernel that exceeds GB10's 99 KiB shared memory) are in
 `bench/gb10/competitors/`. vLLM-Omni's fused single-GPU profile does not start on GB10 (a Triton
