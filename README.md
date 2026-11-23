@@ -90,13 +90,19 @@ than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8
   the attention kernel converts int8 to bf16 exactly and applies the scales to the logits (K) and to
   the probabilities (V). It halves the cache bytes read, and the attention kernel alone is 1.6-1.8x
   faster than BF16 at 128-256 streams (2.7x at 64 streams x 200 tokens, where the smaller cache
-  fits in L2; `results/gb10/kv8_micro.json`, synthetic Gaussian keys). The server measured 174.0
-  audio-s/s at 256 clients in one run; BF16-cache runs on the same box gave 151.0, 161.0 and 159.9,
-  and loads up to 128 clients are unchanged within noise. Plain e4m3 is available as `UQT_KV=fp8`.
-  Batched 300-clip WER at 256 slots, hybrid weights, one seed each: BF16 3.01% (2 clips over 50%
-  errors), INT8 2.32% (1), FP8 3.59% (5); excluding those clips 2.37%, 2.02% and 2.02%. One seed
-  does not separate the three formats, and the rounding error of each on the real cache has not
-  been measured yet (`bench/gb10/kv_real_error.py`).
+  fits in L2; `results/gb10/kv8_micro.json`, synthetic Gaussian keys). Plain e4m3 is
+  available as `UQT_KV=fp8`. On a second GB10, three servers per format run alternately
+  (`results/gb10/kv_server_runs.json`, mean of server means, audio-s/s): 64 clients 101.8 (BF16) vs
+  114.3 (INT8), 128 clients 122.4 vs 140.0, with no overlap between the runs; 256 clients 156.0 vs
+  165.9, where the runs overlap (BF16 128-165, INT8 151-182). Median per-stream RTF was 6-9% lower
+  with INT8 in each of the three pairs at 128 and 256 clients. The earlier single runs on the first
+  GB10 showed no gain at 64 (103.0 vs 101.9) or 128 clients (129.3 vs 130.6).
+  Batched WER, 300 texts x 5 seeds (1,500 clips per format, 256 slots, hybrid weights,
+  `bench/gb10/kv_wer_stats.py`): BF16 2.09%, INT8 1.81%, FP8 2.21%; clips over 50% errors 2, 1 and 4.
+  INT8 minus BF16 is -0.28 points (95% bootstrap CI over texts -0.62 to +0.01), so INT8 shows no
+  loss and no proven gain; FP8 minus BF16 is +0.13 (-0.31 to +0.60). On the real cache (24 prompts,
+  one step, BF16 weights, `results/gb10/kv_real_error.json`) the mean row error is 1.4% (K) and 0.8%
+  (V) for INT8 against 2.6% and 2.7% for FP8.
 - **Single-launch K/V cache writes** for the batched step (`kernels.kv_write_rows`).
 - **Tuned implicit-GEMM tiles**: tile shapes per decoder width (including the 768-wide units),
   swept on GB10 at the shapes the batched engine runs.
@@ -154,6 +160,25 @@ the first non-silent audio (p50, ms).
 | 256 | **174.0** / 521 / 522 | 41.7 / 31965 / 34979 | 72.2 / 5030 / 5158 (410 of 768 failed) |
 
 Cells: throughput / TTFA p50 / voiced TTFA p50. uqt completed every request at every load.
+Each row is one run, all on the same first GB10; the three-run spread at 256 clients on the second
+GB10 is above, and single runs there differ by up to 20%, so treat the 256 row as approximate.
+
+Playback gaps: share of requests with at least one chunk later than real-time playback started at
+the first byte (no client buffer, any size of delay counts), and median RTF, from the same runs:
+
+| Clients | uqt (INT8 KV) | vLLM-Omni | sglang-omni |
+|---|---|---|---|
+| 1 | 0% / 0.12 | 100% / 0.40 | 0% / 0.37 |
+| 8 | 0% / 0.22 | 100% / 0.46 | 29% / 0.38 |
+| 32 | 1% / 0.30 | 100% / 0.81 | 70% / 0.54 |
+| 64 | 4% / 0.40 | 100% / 1.38 | 99% / 0.75 |
+| 128 | 95% / 0.64 | 100% / 1.49 | 100% / 0.84 |
+| 256 | 100% / 1.05 | 100% / 1.50 | 100% / 0.84 |
+
+Up to 64 clients about 1 request in 20 or fewer has a late chunk with uqt (5-7% at 64 on the
+second GB10). At 128 nearly every request has a late chunk even
+though generation is faster than real time on average, and at 256 it is slower than real time. The
+size of those delays was not recorded.
 Earlier uqt configurations on the same harness: FP8 weights with a BF16 cache measured 5.4 / 41 / 41
 at 1 client and 166.9 / 556 / 558 at 256 (`results/gb10/h2h-uqt.json`); hybrid weights with a BF16
 cache 8.1 / 31 / 31 and 159.9 / 560 / 560 (`results/gb10/h2h-uqt-hyb-kvwrite.json`).
