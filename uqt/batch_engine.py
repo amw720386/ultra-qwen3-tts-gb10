@@ -236,7 +236,6 @@ class BatchEngine:
     PACK_BUCKETS = (32, 48, 64, 96, 128, 256, 384, 512, 768, 1024, 1536, 2048)
     PACK_MIN = int(os.environ.get("UQT_PACK_MIN", "128"))  # smallest size used (128: as before)
     PACK_MAX = 16
-    PIN_ADMIT = int(os.environ.get("UQT_PIN_ADMIT", "0"))
 
     def _init_pack(self):
         E = self.e
@@ -314,8 +313,6 @@ class BatchEngine:
         pos_h = torch.cat([torch.arange(T) for T in lens] + [torch.zeros(Tb - tot, dtype=torch.long)])
         seg_h = torch.cat([torch.full((T,), j) for j, T in enumerate(lens)] + [torch.full((Tb - tot,), -1)])
         last_h = torch.tensor([o + T - 1 for o, T in zip(offs, lens)] + [0] * (self.PACK_MAX - len(group)))
-        if self.PIN_ADMIT:  # a copy from pageable memory waits for the step in flight
-            pos_h, seg_h, last_h = pos_h.pin_memory(), seg_h.pin_memory(), last_h.pin_memory()
         self.pk_pos[:Tb].copy_(pos_h.to(self.dev, non_blocking=True))
         self.pk_seg[:Tb].copy_(seg_h.to(self.dev, non_blocking=True))
         self.pk_last.copy_(last_h.to(self.dev, non_blocking=True))

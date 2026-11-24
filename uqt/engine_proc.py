@@ -153,14 +153,15 @@ LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
 # (about 32 streams on GB10): under heavier load the next chunk would arrive late.
 TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "100"))
 TRIM_STEP_MS = float(os.environ.get("UQT_TRIM_STEP_MS", "56"))
-# First byte under load (UQT_WARM_KS must include 1 for K_LOW_AT and FRESH1_AT):
-#   K_LOW_AT: one frame per step up to this many active streams (arrivals wait for shorter steps)
-#   FRESH1_AT: a step that admits a stream is one frame long and that frame is sent alone, where the lead is not trimmed
-#   DEC_FIRST_AT: first chunks decode before the next step runs instead of alongside it
+# First byte under load (UQT_WARM_KS must include 1):
+#   one frame per step while K_LOW_FROM < active streams <= K_LOW_AT: arrivals wait for shorter steps
+#   FRESH1_FROM < active <= FRESH1_AT: a step that admits a stream is one frame long and that frame goes out
+#   alone and untrimmed, so the model's opening silence plays while the next frame is generated
+K_LOW_FROM = int(os.environ.get("UQT_K_LOW_FROM", "16"))
 K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "0"))
+FRESH1_FROM = int(os.environ.get("UQT_FRESH1_FROM", "40"))
 FRESH1_AT = int(os.environ.get("UQT_FRESH1_AT", "0"))
-DEC_FIRST_AT = int(os.environ.get("UQT_DEC_FIRST_AT", "0"))
-TUNE = ("K_LOW_AT", "FRESH1_AT", "DEC_FIRST_AT", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+TUNE = ("K_LOW_FROM", "K_LOW_AT", "FRESH1_FROM", "FRESH1_AT", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
 
@@ -255,7 +256,6 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 be.admit_many(batch)
                 stats["admitted"] += len(batch)
             t_g = time.perf_counter()
-            early = None
             # cancellations: stop generating, drop pending audio
             if cancelled:
                 for s, it in enumerate(be.info):
@@ -267,12 +267,13 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 # under load, more frames per step: fewer host round trips and decode calls per second of audio
                 na = len(be.active())
                 kc = K_HIGH if (K_HIGH and na >= K_HIGH_AT) else K
-                if 16 < na <= K_LOW_AT:
+                if K_LOW_FROM < na <= K_LOW_AT:
                     kc = 1
-                if batch and 16 < na <= FRESH1_AT and not _trim_ok(be):
+                if batch and FRESH1_FROM < na <= FRESH1_AT:
                     kc = 1
                     for b_ in batch:
                         be.info[b_[0]]["f1"] = True
+                        b_[3]["trimmed"] = True  # never trimmed
                 if handle is not None:
                     be.collect(handle)
                     stats["collect"] = stats.get("collect", 0.0) + time.perf_counter() - t_g
@@ -282,11 +283,6 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                     be.step_s = step_k.get(K) or step_k[k_] * K / k_
                 else:
                     be.generate(kc)
-                if DEC_FIRST_AT and 16 < na <= DEC_FIRST_AT:
-                    early = be.decode_launch(split_first=True)
-                    for c_ in early[0]:
-                        if c_[1] is not None:
-                            torch.cuda.current_stream().wait_event(c_[1])
                 handle = be.launch(kc) if be.active() else None
                 t_launch = time.perf_counter()
             frames = []
@@ -309,7 +305,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             # At light load deliver immediately (lower latency); under load overlap decode with generation.
             t_d = time.perf_counter()
             n0 = getattr(be, "dec_calls", 0)
-            firsts, launched = early or be.decode_launch(split_first=True)
+            firsts, launched = be.decode_launch(split_first=True)
             # the previous step's decodes go out first: a stream may have an older chunk there than the one
             # in `firsts` (both ran on the decode stream, in this order, so this does not delay `firsts`)
             if pending_dec is not None:
