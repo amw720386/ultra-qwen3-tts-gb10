@@ -26,33 +26,43 @@ def main():
         E.build_prompt("custom", text=man[0]["target_text"], language="English", speaker="Ryan")
         out["tokens"] = [int(E.build_prompt("custom", text=m["target_text"], language="English",
                                             speaker="Ryan").embeds.shape[0]) for m in man[:60]]
-        be.pos.fill_(150)
-        for B in (32, 48, 64, 96, 128, 160, 192, 224, 256, 320, 384):
-            g = be._graph(1, B, 512)
-            torch.cuda.synchronize()
+        def timed(g, reset):
             ts = []
-            for i in range(30):
-                be.pos[:B].fill_(150)
+            for _ in range(30):
+                reset()
                 torch.cuda.synchronize()
                 t = time.perf_counter()
                 g.replay()
                 torch.cuda.synchronize()
                 ts.append(time.perf_counter() - t)
-            out["step1_ms"][B] = round(1000 * sorted(ts)[len(ts) // 2], 2)
-            print("step1", B, out["step1_ms"][B], flush=True)
+            return round(1000 * sorted(ts)[len(ts) // 2], 2)
+
         be._init_pack()
-        be.pk_seg.zero_()
         be.warm_pack()
         for Tb, g in be.pk_graphs.items():
-            ts = []
-            for i in range(30):
-                torch.cuda.synchronize()
-                t = time.perf_counter()
-                g.replay()
-                torch.cuda.synchronize()
-                ts.append(time.perf_counter() - t)
-            out["pack_ms"][Tb] = round(1000 * sorted(ts)[len(ts) // 2], 2)
+            out["pack_ms"][Tb] = timed(g, lambda: None)
             print("pack", Tb, out["pack_ms"][Tb], flush=True)
+        pool = None
+
+        def reset():
+            be.pos.fill_(150)
+            be.step.fill_(0)
+            be.fidx.fill_(10)
+            be.fcodes.zero_()
+        for B in (32, 48, 64, 96, 128, 160, 192, 224, 256, 320, 384):
+            reset()  # the talker alone: riding rows skip the code predictor
+            st = torch.cuda.Stream()
+            with torch.cuda.stream(st):
+                be._btalker_c(B, 512)
+                be._btalker_c(B, 512)
+            torch.cuda.synchronize()
+            reset()
+            g = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(g, pool=pool):
+                be._btalker_c(B, 512)
+            pool = g.pool()
+            out["step1_ms"][B] = timed(g, reset)
+            print("talker1", B, out["step1_ms"][B], flush=True)
     print("tokens per prompt: median", sorted(out["tokens"])[30], "max", max(out["tokens"]), flush=True)
     json.dump(out, open("/root/results/ride_bound.json", "w"), indent=1)
 
