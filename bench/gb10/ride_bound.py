@@ -40,7 +40,12 @@ def main():
         be._init_pack()
         be.warm_pack()
         for Tb, g in be.pk_graphs.items():
-            out["pack_ms"][Tb] = timed(g, lambda: None)
+            def pk_reset(Tb=Tb):  # warm_pack leaves the largest bucket's indices behind
+                be.pk_pos[:Tb].copy_(be.pk_ar[:Tb])
+                be.pk_seg[:Tb].zero_()
+                be.pk_last.fill_(Tb - 1)
+
+            out["pack_ms"][Tb] = timed(g, pk_reset)
             print("pack", Tb, out["pack_ms"][Tb], flush=True)
         pool = None
 
