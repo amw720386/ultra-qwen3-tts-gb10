@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--swer", default="", help="after the rounds: variant names to score through the server, comma list")
     ap.add_argument("--swer-concs", default="128,256")
+    ap.add_argument("--swer-reps", type=int, default=1, help="interleaved repeats of the server WER")
     ap.add_argument("--runaway", type=int, default=0, help="passes over all texts per variant: count clips that ran long")
     args = ap.parse_args()
     variants = json.load(open(args.variants))
@@ -80,13 +81,16 @@ def main():
                     print("runaway", p, n, json.dumps({k: v for k, v in tot[n].items() if k != "ids"}), flush=True)
             json.dump(tot, open(args.out + ".runaway.json", "w"), indent=1)
             print("runaway-final", json.dumps(tot), flush=True)
-        for n in (x for x in args.swer.split(",") if x):
-            json.dump(variants[n], open(tune, "w"))
-            time.sleep(1.0)
-            load(url, make, texts, concs=(1,), reqs_per_client=1)
-            for c in args.swer_concs.split(","):
-                subprocess.run([sys.executable, "-m", "bench.gb10.server_wer", "--conc", c,
-                                "--out", f"/root/results/swer-{n}-c{c}"], check=False)
+        for rep in range(args.swer_reps):
+            for n in (x for x in args.swer.split(",") if x):
+                json.dump(variants[n], open(tune, "w"))
+                time.sleep(1.0)
+                load(url, make, texts, concs=(1,), reqs_per_client=1)
+                for c in args.swer_concs.split(","):
+                    print("swer-run", rep, n, c, flush=True)
+                    subprocess.run([sys.executable, "-m", "bench.gb10.server_wer", "--conc", c, "--out",
+                                    f"/root/results/swer-{n}-c{c}" + (f"-r{rep}" if args.swer_reps > 1 else "")],
+                                   check=False)
     finally:
         for p in procs[::-1]:
             p.terminate()

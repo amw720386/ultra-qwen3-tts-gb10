@@ -1,0 +1,41 @@
+{
+ "old": {
+  "DEADLINE": 0,
+  "LATE_ADMIT": 0,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 0,
+  "TRIM_MAX_MS": 0,
+  "TRIM_STEP_MS": 56,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1,
+  "PACK_MIN": 128
+ },
+ "merged": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 1,
+  "TRIM_MAX_MS": 100,
+  "TRIM_STEP_MS": 56,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1,
+  "PACK_MIN": 128
+ },
+ "small": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 1,
+  "TRIM_MAX_MS": 100,
+  "TRIM_STEP_MS": 56,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1,
+  "PACK_MIN": 0
+ }
+}
