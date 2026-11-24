@@ -231,9 +231,10 @@ class BatchEngine:
     # ---- packed batched prefill: several prompts in one forward (positions restart per prompt,
     #      block-diagonal causal mask), then each prompt's K/V is copied into its slot.
 
-    # prompts are short (32 tokens median): below 128 the smaller sizes cut a lone request's prefill
+    # sizes under 128 speed up a lone request's prefill (32-token median prompts), but WER came out higher with
+    # them, so they are opt-in (UQT_PACK_MIN=0)
     PACK_BUCKETS = (32, 48, 64, 96, 128, 256, 384, 512, 768, 1024, 1536, 2048)
-    PACK_MIN = int(os.environ.get("UQT_PACK_MIN", "0"))  # smallest size used (128: as before)
+    PACK_MIN = int(os.environ.get("UQT_PACK_MIN", "128"))  # smallest size used (128: as before)
     PACK_MAX = 16
 
     def _init_pack(self):

@@ -48,6 +48,12 @@ kernels for A/B comparisons; `UQT_FP8_BIG=0` keeps bf16 weights above 128 rows; 
 uses indexed assignment for cache writes; `UQT_KV=bf16|int8|fp8` selects the batched KV cache format
 (default int8).
 
+`UQT_PACK_MIN=0` (prefill sizes of 32-96 tokens) cuts first byte by 4-5 ms at 32-64 clients, but WER was
+higher in the same test (excluding garbled clips, +0.19 points against the earlier settings, CI 0.03 to
+0.35), so it is off. Prompt riding (prompt tokens as extra rows of the batched step) was bounded, not ported:
+it could save at most about 10% of a step at 32-128 streams and 1-2% at 256, and would add a step to the
+first byte (`bench/gb10/ride_bound.py`).
+
 Server experiments kept as opt-in switches (measured on GB10, no throughput gain at 1-256 clients):
 `UQT_K_HIGH=4` (4-frame steps under load), `UQT_ADMIT_MIN=4` (batch admissions under load),
 `UQT_EARLY_CHUNKS=2` (never defer the second audio chunk; fewer underruns at 64 clients only).
@@ -188,11 +194,12 @@ At 1-128 clients a client with a small buffer hears no gaps (p90 delay at most a
 where the silence trim removes part of the buffer). At 256 generation runs at real time with no
 headroom, so about two thirds of requests have a late chunk (p90 about 140 ms).
 
-Word error rate through the running server under load (300 texts, one run per load, INT8 KV, hybrid
-weights): 1.97% at 64 clients, 1.86% at 128, 6.39% at 256. The 256 figure is two clips where the model
-kept generating to the 32 s cap (2.09% without them). Over 3,000 further clips at 256 clients each,
-clips over 25 s were 1 with the earlier settings and 2 with these
-(`bench/gb10/ab_live.py --runaway`, `results/gb10/runaway.json`), so the rate did not measurably change. On H100, with the same 300 texts, sglang-omni
+Word error rate through the running server under load (INT8 KV, hybrid weights, 300 texts x 4 interleaved
+runs at each of 64 and 256 clients = 2,400 clips per setting; `results/gb10/swer-reps`): settings before
+the changes below 2.23% (9 clips over 50% errors, 1.85% without them), current settings 2.12% (3 clips,
+1.93%). Current minus earlier is -0.11 points (95% bootstrap CI over texts -0.52 to +0.27), so no loss
+was measured. Clips over 25 s, at 256 clients over 3,000 clips each: 1 earlier, 2 now.
+On H100, with the same 300 texts, sglang-omni
 scored 1.77% and 1.86% and vLLM-Omni 2.03% and 6.97% (three clips over 50% errors in the second):
 accuracy is level across all three systems.
 
