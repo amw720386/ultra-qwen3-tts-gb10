@@ -154,29 +154,33 @@ paths (the fused path equal or slightly closer).
 Streaming HTTP (`/v1/audio/speech`, raw PCM), CustomVoice, voice Ryan, measured on one GB10 with the
 same multi-process client (`bench/gb10/h2h_local.py`), one server at a time, default settings for uqt.
 Each client sends requests back to back. One run at 1 client, three at 8-64, two at 128-256; ranges
-are the spread of those runs. The raw per-load records are `results/gb10/final-uqt.jsonl` and
-`results/gb10/comp-*.jsonl`.
+are the spread of those runs. uqt and sglang-omni at 8-64 were measured on the same day
+(`results/gb10/final2-uqt.jsonl`, `comp2-sglang.jsonl`); vLLM-Omni, and sglang-omni at 1, 128 and 256,
+two days earlier on the same machine (`comp-*.jsonl`).
 
 | Clients | uqt (engine process + Go gateway; hybrid weights, INT8 KV) | vLLM-Omni 0.32 (2-stage default) | sglang-omni 0.2 |
 |---|---|---|---|
-| 1 | 8 / 32 / 33 / 42 | 2 / 56 / 60 / 873 | 3 / 79 / 79 / 89 |
-| 8 | 27-29 / 79 / 86-88 / 89-91 | 12-14 / 96-111 / 126-132 / 1023-1042 | 16-17 / 99-103 / 110-115 / 112 |
-| 32 | 74-78 / 104-109 / 130-139 / 115-119 | 29-30 / 155-168 / 223-240 / 1853-1896 | 40-43 / 90-96 / 462-467 / 197-206 |
-| 64 | 117-121 / 134-140 / 167-170 / 219-230 | 37 / 266-267 / 356-377 / 3104-3172 | 58-61 / 103-107 / 461-488 / 255-261 |
-| 128 | 132-141 / 226-229 / 427-446 / 316-319 | 40 / 10275-10539 / 11286-11760 / 13299-13542 | 70-71 / 4558-4710 / 6416-6542 / 4698-4842 (33-34 of 384 failed) |
-| 256 | 154-185 / 328 / 1166-1169 / 419-420 | 42 / 31039-31511 / 32571-32719 / 34078-34506 | 72 / 4834-5007 / 6120-6214 / 5008-5219 (422-434 of 768 failed) |
+| 1 | 9 / 32 / 33 / 42 | 2 / 56 / 60 / 873 | 3 / 79 / 79 / 89 |
+| 8 | 29-31 / 77-78 / 81-84 / 88 | 12-14 / 96-111 / 126-132 / 1023-1042 | 13-16 / 101-106 / 112-114 / 112-115 |
+| 16 | 44-50 / 76-80 / 110-116 / 86-92 | not measured | 25-26 / 114-117 / 328-392 / 125-127 |
+| 32 | 73-80 / 87-90 / 128-136 / 100-105 | 29-30 / 155-168 / 223-240 / 1853-1896 | 40-44 / 93-97 / 458-464 / 200-207 |
+| 64 | 88-122 / 91-93 / 162-170 / 161-164 | 37 / 266-267 / 356-377 / 3104-3172 | 63-65 / 100-104 / 462-486 / 260-264 |
+| 128 | 127-138 / 229-231 / 392-393 / 312-321 | 40 / 10275-10539 / 11286-11760 / 13299-13542 | 70-71 / 4558-4710 / 6416-6542 / 4698-4842 (33-34 of 384 failed) |
+| 256 | 183-192 / 324 / 1076-1188 / 415 | 42 / 31039-31511 / 32571-32719 / 34078-34506 | 72 / 4834-5007 / 6120-6214 / 5008-5219 (422-434 of 768 failed) |
 
 Cells: throughput (audio-s/s) / first byte p50 / first byte p90 / voice heard p50 (ms). "Voice heard"
 is when a listener hears the voice: first byte, plus any stall, plus the silence a clip opens with.
 uqt drops up to 100 ms of that silence (about 90 ms, `UQT_TRIM_MAX_MS=0` keeps it) while a generation
-step takes at most 56 ms, so that it shows up at up to 32 clients; sglang-omni's clips start almost at once
-on their own.
+step takes at most 56 ms, so that it shows up at up to 32 clients, and at 41-64 streams it keeps at least 60 ms
+of the first frame (see the serving loop below); sglang-omni's clips start almost at once on their own.
 
-- uqt leads on throughput and voice heard at every load, and on first byte p90 at every load. It
+- uqt leads on throughput, voice heard, and first byte (p50 and p90) at every load measured. It
   completed every request; sglang-omni rejected about 9% at 128 and 55% at 256 ("request queue is
   full", its default limits).
-- **It does not win everywhere:** median first byte is behind sglang-omni at 32 and 64 clients (by
-  about 13 and 32 ms), and per-stream RTF at 256 (0.99 against 0.84, on the streams sglang-omni kept).
+- **Not a win:** per-stream RTF at 256 (0.98 against 0.84, on the streams sglang-omni kept). The margin on
+  median first byte at 32 clients is small (3-10 ms).
+- One of the three 64-client uqt runs was slower in throughput than the others (88 audio-s/s; the other two
+  were above 100).
 
 Playback gaps: median RTF / share of requests with any chunk later than real-time playback started
 at the first byte (no client buffer, any size of delay counts) / p90 of the worst delay per request in ms:
@@ -184,15 +188,16 @@ at the first byte (no client buffer, any size of delay counts) / p90 of the wors
 | Clients | uqt | vLLM-Omni | sglang-omni |
 |---|---|---|---|
 | 1 | 0.12 / 0% / 0 | 0.40 / 100% / 722 | 0.37 / 0% / 0 |
-| 8 | 0.21 / 26% / 18 | 0.47 / 100% / 884 | 0.38 / 35% / 75 |
-| 32 | 0.29 / 3% / 0 | 0.82 / 100% / 1702 | 0.54 / 67% / 131 |
-| 64 | 0.39 / 5% / 0 | 1.38 / 100% / 5576 | 0.76 / 99% / 441 |
-| 128 | 0.65 / 4% / 0 | 1.50 / 100% / 6577 | 0.84 / 100% / 435 |
-| 256 | 0.99 / 67% / 142 | 1.50 / 100% / 6582 | 0.84 / 98% / 430 |
+| 8 | 0.21 / 17-25% / 13-22 | 0.47 / 100% / 884 | 0.38 / 29-33% / 75-87 |
+| 16 | 0.23 / 8% / 0 | not measured | 0.42 / 21-40% / 12-38 |
+| 32 | 0.29 / 3-4% / 0 | 0.82 / 100% / 1702 | 0.54 / 65-72% / 131-165 |
+| 64 | 0.41 / 5-9% / 0 | 1.38 / 100% / 5576 | 0.75 / 97-99% / 421-456 |
+| 128 | 0.64 / 4-10% / 0 | 1.50 / 100% / 6577 | 0.84 / 100% / 435 |
+| 256 | 0.98 / 60-63% / 75-97 | 1.50 / 100% / 6582 | 0.84 / 98% / 430 |
 
-At 1-128 clients a client with a small buffer hears no gaps (p90 delay at most about 18 ms, at 8 clients,
+At 1-128 clients a client with a small buffer hears no gaps (p90 delay at most about 22 ms, at 8 clients,
 where the silence trim removes part of the buffer). At 256 generation runs at real time with no
-headroom, so about two thirds of requests have a late chunk (p90 about 140 ms).
+headroom, so about two thirds of requests have a late chunk (p90 about 75-140 ms).
 
 Word error rate through the running server under load (INT8 KV, hybrid weights, 300 texts x 4 interleaved
 runs at each of 64 and 256 clients = 2,400 clips per setting; `results/gb10/swer-reps`): settings before
@@ -210,6 +215,18 @@ Serving loop (`uqt/engine_proc.py`), changed after the earlier tables:
 - A stream's pending audio goes out early when its client buffer is about to run dry, before the chunk
   is full (`UQT_DEADLINE`, `UQT_DEADLINE_MARGIN_MS`, 120). Requests with a late chunk at 128 clients went from
   about 99% of requests to a few percent.
+- One-frame steps (`UQT_K_LOW_FROM`, `UQT_K_LOW_AT`: above 8 and up to 64 streams, active or queued) let a
+  request wait for a shorter step. From 41 to 64 streams (`UQT_FRESH1_FROM`, `UQT_FRESH1_AT`) the step that
+  admits a stream is one frame and that frame is sent at once, with at least 60 ms of it kept
+  (`UQT_F1_KEEP_MS`), so the model's opening silence plays while the next frame is generated. Both are off
+  during a burst (more than `UQT_BURST_N`=24 admissions in half a second). A/B in one server, 4 rounds
+  (`results/gb10/ab-firstbyte5.json`), first byte p50: 103 -> 89 ms at 32 clients, 134 -> 90 at 64; voice heard 115 -> 104 and
+  220 -> 161; throughput at 48 and 64 clients 4-5% lower; gaps over 20 ms no more frequent at 48-256, about
+  a point more at 16-32; any gap at 128 6% -> 12% (almost all under 20 ms). Server WER at 32 and 64 clients, 2,400 clips per
+  setting (`results/gb10/swer-firstbyte`, before the burst rule and with a 72-80 stream cap): 2.29% before, 2.15% with
+  it (6 and 7 clips over 50% errors, 1.91% for both without them); difference -0.13 (95% CI -0.57 to
+  +0.28). Not helpful: pinned copies in prefill admission, other admission lead times, decoding first chunks before the step.
+  A one-frame and a two-frame decode of the same codes agree to 33 dB SNR.
 - Chunks of one stream are always delivered in order; `engine_proc` counts any that are not (`ooo`).
 
 Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
