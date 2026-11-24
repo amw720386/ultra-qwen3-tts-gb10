@@ -231,7 +231,9 @@ class BatchEngine:
     # ---- packed batched prefill: several prompts in one forward (positions restart per prompt,
     #      block-diagonal causal mask), then each prompt's K/V is copied into its slot.
 
-    PACK_BUCKETS = (128, 256, 384, 512, 768, 1024, 1536, 2048)
+    # prompts are short (32 tokens median): below 128 the smaller sizes cut a lone request's prefill
+    PACK_BUCKETS = (32, 48, 64, 96, 128, 256, 384, 512, 768, 1024, 1536, 2048)
+    PACK_MIN = int(os.environ.get("UQT_PACK_MIN", "0"))  # smallest size used (128: as before)
     PACK_MAX = 16
 
     def _init_pack(self):
@@ -299,7 +301,7 @@ class BatchEngine:
 
     def _admit_pack(self, group, tot):
         E = self.e
-        Tb = next(b for b in self.PACK_BUCKETS if b >= tot)
+        Tb = next(b for b in self.PACK_BUCKETS if b >= max(tot, self.PACK_MIN))
         offs, off = [], 0
         for j, (_, p, _, _) in enumerate(group):
             T = p.embeds.shape[0]
