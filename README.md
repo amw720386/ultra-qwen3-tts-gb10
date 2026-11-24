@@ -145,50 +145,66 @@ paths (the fused path equal or slightly closer).
 
 ### Head-to-head on GB10
 
-Streaming HTTP (`/v1/audio/speech`, raw PCM), CustomVoice, voice Ryan, measured on the box with the
-same multi-process client (`bench/gb10/h2h_local.py`), one server at a time. Each client sends
-requests back to back. Throughput in audio-s/s; TTFA = time to first audio byte, voiced = time to
-the first non-silent audio (p50, ms).
+Streaming HTTP (`/v1/audio/speech`, raw PCM), CustomVoice, voice Ryan, measured on one GB10 with the
+same multi-process client (`bench/gb10/h2h_local.py`), one server at a time, default settings for uqt.
+Each client sends requests back to back. One run at 1 client, three at 8-64, two at 128-256; ranges
+are the spread of those runs. The raw per-load records are `results/gb10/final-uqt.jsonl` and
+`results/gb10/comp-*.jsonl`.
 
 | Clients | uqt (engine process + Go gateway; hybrid weights, INT8 KV) | vLLM-Omni 0.32 (2-stage default) | sglang-omni 0.2 |
 |---|---|---|---|
-| 1 | **8.1** / 31 / 31 | 2.4 / 60 / 858 | 2.6 / 78 / 78 |
-| 8 | **25.8** / 91 / 91 | 13.1 / 109 / 1035 | 17.1 / 106 / 106 |
-| 32 | **78.9** / 153 / 153 | 27.2 / 162 / 1857 | 39.3 / 93 / 195 |
-| 64 | **101.9** / 201 / 201 | 36.0 / 261 / 3154 | 61.5 / 103 / 248 |
-| 128 | **130.6** / 332 / 332 | 40.8 / 10090 / 13124 | 69.3 / 5280 / 5410 (15 of 384 failed) |
-| 256 | **174.0** / 521 / 522 | 41.7 / 31965 / 34979 | 72.2 / 5030 / 5158 (410 of 768 failed) |
+| 1 | 8 / 32 / 33 / 42 | 2 / 56 / 60 / 873 | 3 / 79 / 79 / 89 |
+| 8 | 27-29 / 79 / 86-88 / 89-91 | 12-14 / 96-111 / 126-132 / 1023-1042 | 16-17 / 99-103 / 110-115 / 112 |
+| 32 | 74-78 / 104-109 / 130-139 / 115-119 | 29-30 / 155-168 / 223-240 / 1853-1896 | 40-43 / 90-96 / 462-467 / 197-206 |
+| 64 | 117-121 / 134-140 / 167-170 / 219-230 | 37 / 266-267 / 356-377 / 3104-3172 | 58-61 / 103-107 / 461-488 / 255-261 |
+| 128 | 132-141 / 226-229 / 427-446 / 316-319 | 40 / 10275-10539 / 11286-11760 / 13299-13542 | 70-71 / 4558-4710 / 6416-6542 / 4698-4842 (33-34 of 384 failed) |
+| 256 | 154-185 / 328 / 1166-1169 / 419-420 | 42 / 31039-31511 / 32571-32719 / 34078-34506 | 72 / 4834-5007 / 6120-6214 / 5008-5219 (422-434 of 768 failed) |
 
-Cells: throughput / TTFA p50 / voiced TTFA p50. Voiced TTFA is when the chunk holding the first
-voiced sample arrives, not when a listener hears it: our clips open with about 90 ms of near-silence
-(median of 300), which plays in real time after the first byte. uqt's and
-vLLM-Omni's clips do this (90 ms median of 40 each); sglang-omni's start almost at once (10 ms). uqt's
-voice is therefore heard at roughly 240 ms at 32 clients and 290 ms at 64, against about 195 and
-250 ms for sglang-omni, so the voiced column does not show a uqt lead over it at 32-64 clients.
-`bench/h2h/client.py` now records `heard_ms`; the tables have not
-been rerun with it. uqt completed every request at every load.
-Each row is one run, all on the same first GB10; the three-run spread at 256 clients on the second
-GB10 is above, and single runs there differ by up to 20%, so treat the 256 row as approximate.
+Cells: throughput (audio-s/s) / first byte p50 / first byte p90 / voice heard p50 (ms). "Voice heard"
+is when a listener hears the voice: first byte, plus any stall, plus the silence a clip opens with.
+uqt drops up to 100 ms of that silence (about 90 ms, `UQT_TRIM_MAX_MS=0` keeps it) while a generation
+step takes at most 56 ms, so that it shows up at up to 32 clients; sglang-omni's clips start almost at once
+on their own.
 
-Playback gaps: share of requests with at least one chunk later than real-time playback started at
-the first byte (no client buffer, any size of delay counts), and median RTF, from the same runs:
+- uqt leads on throughput and voice heard at every load, and on first byte p90 at every load. It
+  completed every request; sglang-omni rejected about 9% at 128 and 55% at 256 ("request queue is
+  full", its default limits).
+- **It does not win everywhere:** median first byte is behind sglang-omni at 32 and 64 clients (by
+  about 13 and 32 ms), and per-stream RTF at 256 (0.99 against 0.84, on the streams sglang-omni kept).
 
-| Clients | uqt (INT8 KV) | vLLM-Omni | sglang-omni |
+Playback gaps: median RTF / share of requests with any chunk later than real-time playback started
+at the first byte (no client buffer, any size of delay counts) / p90 of the worst delay per request in ms:
+
+| Clients | uqt | vLLM-Omni | sglang-omni |
 |---|---|---|---|
-| 1 | 0% / 0.12 | 100% / 0.40 | 0% / 0.37 |
-| 8 | 0% / 0.22 | 100% / 0.46 | 29% / 0.38 |
-| 32 | 1% / 0.30 | 100% / 0.81 | 70% / 0.54 |
-| 64 | 4% / 0.40 | 100% / 1.38 | 99% / 0.75 |
-| 128 | 95% / 0.64 | 100% / 1.49 | 100% / 0.84 |
-| 256 | 100% / 1.05 | 100% / 1.50 | 100% / 0.84 |
+| 1 | 0.12 / 0% / 0 | 0.40 / 100% / 722 | 0.37 / 0% / 0 |
+| 8 | 0.21 / 26% / 18 | 0.47 / 100% / 884 | 0.38 / 35% / 75 |
+| 32 | 0.29 / 3% / 0 | 0.82 / 100% / 1702 | 0.54 / 67% / 131 |
+| 64 | 0.39 / 5% / 0 | 1.38 / 100% / 5576 | 0.76 / 99% / 441 |
+| 128 | 0.65 / 4% / 0 | 1.50 / 100% / 6577 | 0.84 / 100% / 435 |
+| 256 | 0.99 / 67% / 142 | 1.50 / 100% / 6582 | 0.84 / 98% / 430 |
 
-Up to 64 clients about 1 request in 20 or fewer has a late chunk with uqt (5-7% at 64 on the
-second GB10). At 128 nearly every request has a late chunk even
-though generation is faster than real time on average, and at 256 it is slower than real time. The
-size of those delays was not recorded.
-Earlier uqt configurations on the same harness: FP8 weights with a BF16 cache measured 5.4 / 41 / 41
-at 1 client and 166.9 / 556 / 558 at 256 (`results/gb10/h2h-uqt.json`); hybrid weights with a BF16
-cache 8.1 / 31 / 31 and 159.9 / 560 / 560 (`results/gb10/h2h-uqt-hyb-kvwrite.json`).
+At 1-128 clients a client with a small buffer hears no gaps (p90 delay at most about 18 ms, at 8 clients,
+where the silence trim removes part of the buffer). At 256 generation runs at real time with no
+headroom, so about two thirds of requests have a late chunk (p90 about 140 ms).
+
+Word error rate through the running server under load (300 texts, one run per load, INT8 KV, hybrid
+weights): 1.97% at 64 clients, 1.86% at 128, 6.39% at 256. The 256 figure is two clips where the model
+kept generating to the 32 s cap (2.09% without them). Over 3,000 further clips at 256 clients each,
+clips over 25 s were 1 with the earlier settings and 2 with these
+(`bench/gb10/ab_live.py --runaway`, `results/gb10/runaway.json`), so the rate did not measurably change. On H100, with the same 300 texts, sglang-omni
+scored 1.77% and 1.86% and vLLM-Omni 2.03% and 6.97% (three clips over 50% errors in the second):
+accuracy is level across all three systems.
+
+Serving loop (`uqt/engine_proc.py`), changed after the earlier tables:
+- Host-to-GPU copies in the step launch and decode are non-blocking (`UQT_ASYNC_H2D`). A blocking copy
+  waited for the step that was just launched, so decode and admission did not overlap generation.
+- A request that arrives while a step runs joins the next step (`UQT_LATE_ADMIT`).
+- A stream's pending audio goes out early when its client buffer is about to run dry, before the chunk
+  is full (`UQT_DEADLINE`, `UQT_DEADLINE_MARGIN_MS`, 120). Requests with a late chunk at 128 clients went from
+  about 99% of requests to a few percent.
+- Chunks of one stream are always delivered in order; `engine_proc` counts any that are not (`ooo`).
+
 Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
 for an sglang-omni Triton kernel that exceeds GB10's 99 KiB shared memory) are in
 `bench/gb10/competitors/`. vLLM-Omni's fused single-GPU profile does not start on GB10 (a Triton
