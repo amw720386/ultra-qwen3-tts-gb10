@@ -38,6 +38,10 @@ def _pcm(w):
 HOPS = {"recv_to_admit": [], "admit_to_first": []}
 
 
+def _trim_ok(be):
+    return TRIM_MAX_MS and 1000 * getattr(be, "step_s", 0.0) <= TRIM_STEP_MS
+
+
 def _trim_lead(b, it):
     """Leading-silence trim of a stream's first chunk; returns the bytes to send."""
     x = np.frombuffer(b, dtype=np.int16).astype(np.float32)
@@ -62,9 +66,9 @@ def _emit(be, outs, cancelled, frames):
             meta["first"] = time.perf_counter()
             HOPS["recv_to_admit"].append(meta["admit"] - meta["recv"])
             HOPS["admit_to_first"].append(meta["first"] - meta["admit"])
-        if b and TRIM_MAX_MS and not meta.get("trimmed"):
-            meta["trimmed"] = True
-            b = _trim_lead(b, be.info[s])
+        if b and not meta.get("trimmed"):
+            meta["trimmed"] = True  # decided once, on the first chunk
+            b = _trim_lead(b, be.info[s]) if _trim_ok(be) else b
         if b and rid not in cancelled:
             frames.append(HDR.pack(AUDIO, rid, len(b)))
             frames.append(b)
@@ -145,8 +149,11 @@ LATE_ADMIT = int(os.environ.get("UQT_LATE_ADMIT", "1"))
 LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
 # Drop the model's leading near-silence (about 90 ms) from the start of a stream, so the first byte a
 # client plays is the voice. Keeps 10 ms before it and never drops more than TRIM_MAX_MS (0: off).
-TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "0"))
-TUNE = ("TRIM_MAX_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+# The silence is also playback buffer, so it is only dropped while a step takes at most TRIM_STEP_MS
+# (about 32 streams on GB10): under heavier load the next chunk would arrive late.
+TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "100"))
+TRIM_STEP_MS = float(os.environ.get("UQT_TRIM_STEP_MS", "56"))
+TUNE = ("TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
 
@@ -256,6 +263,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                     stats["collect"] = stats.get("collect", 0.0) + time.perf_counter() - t_g
                     dt = time.perf_counter() - t_launch
                     step_s = dt if not step_s else 0.7 * step_s + 0.3 * dt
+                    be.step_s = step_s
                 else:
                     be.generate(kc)
                 handle = be.launch(kc) if be.active() else None
@@ -268,9 +276,9 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 meta["first"] = time.perf_counter()
                 HOPS["recv_to_admit"].append(meta["admit"] - meta["recv"])
                 HOPS["admit_to_first"].append(meta["first"] - meta["admit"])
-                if b and TRIM_MAX_MS:
-                    meta["trimmed"] = True
-                    b = _trim_lead(b, be.info[slot])
+                if b:
+                    meta["trimmed"] = True  # also when not trimmed: later chunks are never cut
+                    b = _trim_lead(b, be.info[slot]) if _trim_ok(be) else b
                 if b:
                     frames += [HDR.pack(AUDIO, rid, len(b)), b]
                 if fin:
