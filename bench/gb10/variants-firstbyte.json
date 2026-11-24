@@ -1,0 +1,58 @@
+{
+ "base": {
+  "PIN_ADMIT": 0,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 0,
+  "DEC_FIRST_AT": 0,
+  "LATE_LEAD_MS": 8
+ },
+ "pin": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 0,
+  "DEC_FIRST_AT": 0,
+  "LATE_LEAD_MS": 8
+ },
+ "pin_lead4": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 0,
+  "DEC_FIRST_AT": 0,
+  "LATE_LEAD_MS": 4
+ },
+ "pin_lead14": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 0,
+  "DEC_FIRST_AT": 0,
+  "LATE_LEAD_MS": 14
+ },
+ "pin_df": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 0,
+  "DEC_FIRST_AT": 100,
+  "LATE_LEAD_MS": 8
+ },
+ "pin_k1": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 100,
+  "FRESH1_AT": 0,
+  "DEC_FIRST_AT": 0,
+  "LATE_LEAD_MS": 8
+ },
+ "pin_f1": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 100,
+  "DEC_FIRST_AT": 0,
+  "LATE_LEAD_MS": 8
+ },
+ "pin_f1_df": {
+  "PIN_ADMIT": 1,
+  "K_LOW_AT": 0,
+  "FRESH1_AT": 100,
+  "DEC_FIRST_AT": 100,
+  "LATE_LEAD_MS": 8
+ }
+}

@@ -153,7 +153,14 @@ LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
 # (about 32 streams on GB10): under heavier load the next chunk would arrive late.
 TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "100"))
 TRIM_STEP_MS = float(os.environ.get("UQT_TRIM_STEP_MS", "56"))
-TUNE = ("TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+# First byte under load (UQT_WARM_KS must include 1 for K_LOW_AT and FRESH1_AT):
+#   K_LOW_AT: one frame per step up to this many active streams (arrivals wait for shorter steps)
+#   FRESH1_AT: a step that admits a stream is one frame long and that frame is sent alone, where the lead is not trimmed
+#   DEC_FIRST_AT: first chunks decode before the next step runs instead of alongside it
+K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "0"))
+FRESH1_AT = int(os.environ.get("UQT_FRESH1_AT", "0"))
+DEC_FIRST_AT = int(os.environ.get("UQT_DEC_FIRST_AT", "0"))
+TUNE = ("K_LOW_AT", "FRESH1_AT", "DEC_FIRST_AT", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
 
@@ -188,7 +195,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
     threading.Thread(target=_reader, args=(conn, q, cancelled), daemon=True).start()
     conn.sendall(HDR.pack(READY, 0, 0))
     handle = None
-    step_s, t_launch = 0.0, 0.0  # LATE_ADMIT: smoothed launch-to-done time of a step
+    step_k, t_launch = {}, 0.0  # LATE_ADMIT: smoothed launch-to-done time of a step, by frames per step
     pending_dec = None
     waiting: list = []  # requests held for a shared packed prefill (see ADMIT_*)
     stats = {"iters": 0, "admit": 0.0, "gen": 0.0, "dec": 0.0, "send": 0.0, "dec_calls": 0, "admitted": 0,
@@ -203,7 +210,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             t_w = time.perf_counter()
             if LATE_ADMIT and handle is not None:
                 while (not handle[3].query()
-                       and time.perf_counter() - t_launch < step_s - LATE_LEAD_MS / 1000):
+                       and time.perf_counter() - t_launch < step_k.get(handle[4], 0.0) - LATE_LEAD_MS / 1000):
                     time.sleep(0.001)
             t_a = time.perf_counter()
             stats["latewait"] = stats.get("latewait", 0.0) + t_a - t_w
@@ -248,6 +255,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 be.admit_many(batch)
                 stats["admitted"] += len(batch)
             t_g = time.perf_counter()
+            early = None
             # cancellations: stop generating, drop pending audio
             if cancelled:
                 for s, it in enumerate(be.info):
@@ -257,15 +265,28 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             # generation (collect step i, launch step i+1 before decoding)
             if handle is not None or be.active():
                 # under load, more frames per step: fewer host round trips and decode calls per second of audio
-                kc = K_HIGH if (K_HIGH and len(be.active()) >= K_HIGH_AT) else K
+                na = len(be.active())
+                kc = K_HIGH if (K_HIGH and na >= K_HIGH_AT) else K
+                if 16 < na <= K_LOW_AT:
+                    kc = 1
+                if batch and 16 < na <= FRESH1_AT and not _trim_ok(be):
+                    kc = 1
+                    for b_ in batch:
+                        be.info[b_[0]]["f1"] = True
                 if handle is not None:
                     be.collect(handle)
                     stats["collect"] = stats.get("collect", 0.0) + time.perf_counter() - t_g
                     dt = time.perf_counter() - t_launch
-                    step_s = dt if not step_s else 0.7 * step_s + 0.3 * dt
-                    be.step_s = step_s
+                    k_ = handle[4]
+                    step_k[k_] = 0.7 * step_k[k_] + 0.3 * dt if k_ in step_k else dt
+                    be.step_s = step_k.get(K) or step_k[k_] * K / k_
                 else:
                     be.generate(kc)
+                if DEC_FIRST_AT and 16 < na <= DEC_FIRST_AT:
+                    early = be.decode_launch(split_first=True)
+                    for c_ in early[0]:
+                        if c_[1] is not None:
+                            torch.cuda.current_stream().wait_event(c_[1])
                 handle = be.launch(kc) if be.active() else None
                 t_launch = time.perf_counter()
             frames = []
@@ -288,7 +309,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
             # At light load deliver immediately (lower latency); under load overlap decode with generation.
             t_d = time.perf_counter()
             n0 = getattr(be, "dec_calls", 0)
-            firsts, launched = be.decode_launch(split_first=True)
+            firsts, launched = early or be.decode_launch(split_first=True)
             # the previous step's decodes go out first: a stream may have an older chunk there than the one
             # in `firsts` (both ran on the decode stream, in this order, so this does not delay `firsts`)
             if pending_dec is not None:
