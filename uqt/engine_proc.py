@@ -157,8 +157,8 @@ LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
 TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "100"))
 TRIM_STEP_MS = float(os.environ.get("UQT_TRIM_STEP_MS", "56"))
 # First byte under load (UQT_WARM_KS must include 1):
-#   one frame per step while K_LOW_FROM < active streams <= K_LOW_AT: arrivals wait for shorter steps
-#   FRESH1_FROM < active <= FRESH1_AT: a step that admits a stream is one frame long and that frame goes out
+#   one frame per step while K_LOW_FROM < streams (active or queued) <= K_LOW_AT: arrivals wait for shorter steps
+#   FRESH1_FROM < streams <= FRESH1_AT: a step that admits a stream is one frame long and that frame goes out
 #   alone with at least F1_KEEP_MS of it kept: the model's opening silence plays while the next frame is generated
 K_LOW_FROM = int(os.environ.get("UQT_K_LOW_FROM", "16"))
 K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "0"))
@@ -271,9 +271,10 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 # under load, more frames per step: fewer host round trips and decode calls per second of audio
                 na = len(be.active())
                 kc = K_HIGH if (K_HIGH and na >= K_HIGH_AT) else K
-                if K_LOW_FROM < na <= K_LOW_AT:
+                load = na + len(waiting) + q.qsize()  # a burst still queued is load the next steps will carry
+                if K_LOW_FROM < load <= K_LOW_AT:
                     kc = 1
-                if batch and FRESH1_FROM < na <= FRESH1_AT:
+                if batch and FRESH1_FROM < load <= FRESH1_AT:
                     kc = 1
                     for b_ in batch:
                         be.info[b_[0]]["f1"] = True
