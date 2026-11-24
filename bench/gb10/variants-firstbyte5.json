@@ -1,0 +1,18 @@
+{
+ "base": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 0,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 0,
+  "F1_KEEP_MS": 60,
+  "BURST_N": 24
+ },
+ "new": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 64,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 64,
+  "F1_KEEP_MS": 60,
+  "BURST_N": 24
+ }
+}

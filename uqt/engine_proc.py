@@ -24,6 +24,7 @@ import socket
 import struct
 import threading
 import time
+from collections import deque
 
 import numpy as np
 
@@ -164,8 +165,9 @@ K_LOW_FROM = int(os.environ.get("UQT_K_LOW_FROM", "16"))
 K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "0"))
 FRESH1_FROM = int(os.environ.get("UQT_FRESH1_FROM", "40"))
 FRESH1_AT = int(os.environ.get("UQT_FRESH1_AT", "0"))
+BURST_N = int(os.environ.get("UQT_BURST_N", "24"))  # admissions per half second that count as a burst
 F1_KEEP_MS = float(os.environ.get("UQT_F1_KEEP_MS", "80"))
-TUNE = ("K_LOW_FROM", "K_LOW_AT", "FRESH1_FROM", "FRESH1_AT", "F1_KEEP_MS", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+TUNE = ("K_LOW_FROM", "K_LOW_AT", "FRESH1_FROM", "FRESH1_AT", "F1_KEEP_MS", "BURST_N", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
 
@@ -202,6 +204,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
     handle = None
     step_k, t_launch = {}, 0.0  # LATE_ADMIT: smoothed launch-to-done time of a step, by frames per step
     pending_dec = None
+    recent: deque = deque()  # (time, streams admitted) over the last half second
     waiting: list = []  # requests held for a shared packed prefill (see ADMIT_*)
     stats = {"iters": 0, "admit": 0.0, "gen": 0.0, "dec": 0.0, "send": 0.0, "dec_calls": 0, "admitted": 0,
              "active": 0, "t": time.perf_counter()}
@@ -260,6 +263,10 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 be.admit_many(batch)
                 stats["admitted"] += len(batch)
             t_g = time.perf_counter()
+            if batch or fast is not None:
+                recent.append((t_g, len(batch) + (fast is not None)))
+            while recent and t_g - recent[0][0] > 0.5:
+                recent.popleft()
             # cancellations: stop generating, drop pending audio
             if cancelled:
                 for s, it in enumerate(be.info):
@@ -272,9 +279,11 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 na = len(be.active())
                 kc = K_HIGH if (K_HIGH and na >= K_HIGH_AT) else K
                 load = na + len(waiting) + q.qsize()  # a burst still queued is load the next steps will carry
-                if K_LOW_FROM < load <= K_LOW_AT:
+                # not while a burst arrives: load is about to rise and those streams would run dry
+                steady = sum(n_ for t_, n_ in recent) <= BURST_N
+                if K_LOW_FROM < load <= K_LOW_AT and steady:
                     kc = 1
-                if batch and FRESH1_FROM < load <= FRESH1_AT:
+                if batch and FRESH1_FROM < load <= FRESH1_AT and steady:
                     kc = 1
                     for b_ in batch:
                         be.info[b_[0]]["f1"] = True
