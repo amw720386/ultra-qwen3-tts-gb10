@@ -1,0 +1,46 @@
+{
+ "old": {
+  "DEADLINE": 0,
+  "LATE_ADMIT": 0,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 0,
+  "TRIM_MAX_MS": 0,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1
+ },
+ "new": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 1,
+  "TRIM_MAX_MS": 100,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1
+ },
+ "async_only": {
+  "DEADLINE": 0,
+  "LATE_ADMIT": 0,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 1,
+  "TRIM_MAX_MS": 0,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1
+ },
+ "late_dl": {
+  "DEADLINE": 1,
+  "LATE_ADMIT": 1,
+  "FAST_MAX": 8,
+  "K_HIGH": 0,
+  "K_HIGH_AT": 160,
+  "ASYNC_H2D": 0,
+  "TRIM_MAX_MS": 0,
+  "DEADLINE_MARGIN_MS": 120,
+  "EARLY_CHUNKS": 1
+ }
+}

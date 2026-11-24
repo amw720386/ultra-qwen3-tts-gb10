@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--swer", default="", help="after the rounds: variant names to score through the server, comma list")
     ap.add_argument("--swer-concs", default="128,256")
+    ap.add_argument("--runaway", type=int, default=0, help="passes over all texts per variant: count clips that ran long")
     args = ap.parse_args()
     variants = json.load(open(args.variants))
     tune = "/tmp/uqt-tune.json"
@@ -58,6 +59,27 @@ def main():
                                             if k in ("round", "variant", "C", "n_ok", "n", "throughput_audio_s_per_s",
                                                      "ttfa_ms_p50", "ttfa_ms_p90", "heard_ms_p50", "rtf_p50",
                                                      "underrun_frac", "late_ms_p50", "late_ms_p90", "late_gt50ms_frac")}), flush=True)
+        if args.runaway:
+            import asyncio
+
+            from bench.gb10.server_wer import collect
+            man = json.load(open(args.manifest))[:300]
+            tot = {n: {"clips": 0, "over_25s": 0, "at_cap": 0, "ids": []} for n in variants}
+            for p in range(args.runaway):
+                for n in (list(variants) if p % 2 == 0 else list(variants)[::-1]):
+                    json.dump(variants[n], open(tune, "w"))
+                    time.sleep(1.0)
+                    load(url, make, texts, concs=(1,), reqs_per_client=1)
+                    for k, b in asyncio.run(collect(url, man, 256)).items():
+                        d = len(b) / 2 / 24000
+                        tot[n]["clips"] += 1
+                        tot[n]["over_25s"] += d > 25
+                        tot[n]["at_cap"] += d > 31.5
+                        if d > 25:
+                            tot[n]["ids"].append([p, k, round(d, 1)])
+                    print("runaway", p, n, json.dumps({k: v for k, v in tot[n].items() if k != "ids"}), flush=True)
+            json.dump(tot, open(args.out + ".runaway.json", "w"), indent=1)
+            print("runaway-final", json.dumps(tot), flush=True)
         for n in (x for x in args.swer.split(",") if x):
             json.dump(variants[n], open(tune, "w"))
             time.sleep(1.0)
