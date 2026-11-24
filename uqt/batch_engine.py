@@ -478,7 +478,7 @@ class BatchEngine:
     # time after the one before. With DEADLINE a stream's pending frames go out early, undeferred if need
     # be, when its estimated buffer is about to run out. Costs more, smaller decode calls under load.
     DEADLINE = int(os.environ.get("UQT_DEADLINE", "1"))
-    DEADLINE_MARGIN_MS = float(os.environ.get("UQT_DEADLINE_MARGIN_MS", "20"))
+    DEADLINE_MARGIN_MS = float(os.environ.get("UQT_DEADLINE_MARGIN_MS", "120"))
     # streams x frames per codec call: the late codec layers launch (rows / 32) blocks on one grid axis,
     # which must stay below 65535 (rows = streams * frames * 1920 samples)
     DEC_FRAME_BUDGET = 1024
