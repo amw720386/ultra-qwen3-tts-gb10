@@ -157,16 +157,16 @@ LATE_LEAD_MS = float(os.environ.get("UQT_LATE_LEAD_MS", "8"))
 # (about 32 streams on GB10): under heavier load the next chunk would arrive late.
 TRIM_MAX_MS = float(os.environ.get("UQT_TRIM_MAX_MS", "100"))
 TRIM_STEP_MS = float(os.environ.get("UQT_TRIM_STEP_MS", "56"))
-# First byte under load (UQT_WARM_KS must include 1):
+# First byte under load (K_LOW_AT=0 and FRESH1_AT=0: always two frames per step):
 #   one frame per step while K_LOW_FROM < streams (active or queued) <= K_LOW_AT: arrivals wait for shorter steps
 #   FRESH1_FROM < streams <= FRESH1_AT: a step that admits a stream is one frame long and that frame goes out
 #   alone with at least F1_KEEP_MS of it kept: the model's opening silence plays while the next frame is generated
-K_LOW_FROM = int(os.environ.get("UQT_K_LOW_FROM", "16"))
-K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "0"))
+K_LOW_FROM = int(os.environ.get("UQT_K_LOW_FROM", "8"))
+K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "64"))
 FRESH1_FROM = int(os.environ.get("UQT_FRESH1_FROM", "40"))
-FRESH1_AT = int(os.environ.get("UQT_FRESH1_AT", "0"))
+FRESH1_AT = int(os.environ.get("UQT_FRESH1_AT", "64"))
 BURST_N = int(os.environ.get("UQT_BURST_N", "24"))  # admissions per half second that count as a burst
-F1_KEEP_MS = float(os.environ.get("UQT_F1_KEEP_MS", "80"))
+F1_KEEP_MS = float(os.environ.get("UQT_F1_KEEP_MS", "60"))
 TUNE = ("K_LOW_FROM", "K_LOW_AT", "FRESH1_FROM", "FRESH1_AT", "F1_KEEP_MS", "BURST_N", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
@@ -381,7 +381,7 @@ def main():
         eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
         be = BatchEngine(eng, max_slots=args.max_slots, max_len=args.max_len)
         be.warmup(Ks=tuple(int(k) for k in os.environ.get("UQT_WARM_KS", "").split(",") if k)
-                  or ((2, K_HIGH) if K_HIGH else (2,)))
+                  or tuple(k for k, on in ((1, K_LOW_AT or FRESH1_AT), (2, True), (K_HIGH, K_HIGH)) if on))
         wp = eng.build_prompt("custom", text="Warming up the fast lane for new requests.", language="English",
                               speaker="Ryan")
         eng.warmup(wp, Ks=(2,), max_bucket=min(1024, args.max_len), prefill_max=512)
