@@ -531,11 +531,14 @@ class BatchEngine:
                     groups.setdefault((0, False), []).append((s, 0))
                 continue
             target = self.RAMP[min(it["ci"], len(self.RAMP) - 1)]
-            if it.get("f1") and it["ci"] == 0 and pend == 1:
-                target = 1  # admitted into a 1-frame step: its first frame goes out alone
+            early = self.EARLY_CHUNKS
+            if it.get("f1"):  # admitted into a 1-frame step: the first two frames go out one by one
+                early += 1
+                if it["ci"] < 2 and pend == 1:
+                    target = 1
             # the first EARLY_CHUNKS chunks of a stream are never held back by the caller: they build the
             # client's playback buffer, and a late second chunk is an audible gap
-            first = split_first and (it["ci"] < self.EARLY_CHUNKS or (slack is not None and slack < step + margin))
+            first = split_first and (it["ci"] < early or (slack is not None and slack < step + margin))
             if slack is not None and 2 <= pend < target and slack < 2 * step + margin:
                 target = max(f for f in self.RAMP if f <= pend)  # cannot wait for a full chunk
             if pend >= target:

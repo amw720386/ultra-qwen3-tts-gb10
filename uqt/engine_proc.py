@@ -42,11 +42,11 @@ def _trim_ok(be):
     return TRIM_MAX_MS and 1000 * getattr(be, "step_s", 0.0) <= TRIM_STEP_MS
 
 
-def _trim_lead(b, it):
+def _trim_lead(b, it, max_ms=None):
     """Leading-silence trim of a stream's first chunk; returns the bytes to send."""
     x = np.frombuffer(b, dtype=np.int16).astype(np.float32)
     w = 240  # 10 ms
-    n = min(len(x), int(TRIM_MAX_MS * 24)) // w
+    n = min(len(x), int((TRIM_MAX_MS if max_ms is None else max_ms) * 24)) // w
     if not n:
         return b
     rms = np.sqrt(np.mean(x[:n * w].reshape(n, w) ** 2, axis=1)) / 32768.0
@@ -68,7 +68,10 @@ def _emit(be, outs, cancelled, frames):
             HOPS["admit_to_first"].append(meta["first"] - meta["admit"])
         if b and not meta.get("trimmed"):
             meta["trimmed"] = True  # decided once, on the first chunk
-            b = _trim_lead(b, be.info[s]) if _trim_ok(be) else b
+            if be.info[s].get("f1"):
+                b = _trim_lead(b, be.info[s], max(0.0, 80.0 - F1_KEEP_MS))
+            else:
+                b = _trim_lead(b, be.info[s]) if _trim_ok(be) else b
         if b and rid not in cancelled:
             frames.append(HDR.pack(AUDIO, rid, len(b)))
             frames.append(b)
@@ -156,12 +159,13 @@ TRIM_STEP_MS = float(os.environ.get("UQT_TRIM_STEP_MS", "56"))
 # First byte under load (UQT_WARM_KS must include 1):
 #   one frame per step while K_LOW_FROM < active streams <= K_LOW_AT: arrivals wait for shorter steps
 #   FRESH1_FROM < active <= FRESH1_AT: a step that admits a stream is one frame long and that frame goes out
-#   alone and untrimmed, so the model's opening silence plays while the next frame is generated
+#   alone with at least F1_KEEP_MS of it kept: the model's opening silence plays while the next frame is generated
 K_LOW_FROM = int(os.environ.get("UQT_K_LOW_FROM", "16"))
 K_LOW_AT = int(os.environ.get("UQT_K_LOW_AT", "0"))
 FRESH1_FROM = int(os.environ.get("UQT_FRESH1_FROM", "40"))
 FRESH1_AT = int(os.environ.get("UQT_FRESH1_AT", "0"))
-TUNE = ("K_LOW_FROM", "K_LOW_AT", "FRESH1_FROM", "FRESH1_AT", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
+F1_KEEP_MS = float(os.environ.get("UQT_F1_KEEP_MS", "80"))
+TUNE = ("K_LOW_FROM", "K_LOW_AT", "FRESH1_FROM", "FRESH1_AT", "F1_KEEP_MS", "TRIM_MAX_MS", "TRIM_STEP_MS", "K_HIGH", "K_HIGH_AT", "FAST_MAX", "LATE_ADMIT", "LATE_LEAD_MS")
 _tune_mtime = None
 
 
@@ -273,14 +277,13 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                     kc = 1
                     for b_ in batch:
                         be.info[b_[0]]["f1"] = True
-                        b_[3]["trimmed"] = True  # never trimmed
                 if handle is not None:
                     be.collect(handle)
                     stats["collect"] = stats.get("collect", 0.0) + time.perf_counter() - t_g
                     dt = time.perf_counter() - t_launch
                     k_ = handle[4]
                     step_k[k_] = 0.7 * step_k[k_] + 0.3 * dt if k_ in step_k else dt
-                    be.step_s = step_k.get(K) or step_k[k_] * K / k_
+                    be.step_s = step_k[k_] * K / k_  # as if K frames
                 else:
                     be.generate(kc)
                 handle = be.launch(kc) if be.active() else None
@@ -329,6 +332,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 stats["send"] += t_e - t_s
                 stats["dec_calls"] += getattr(be, "dec_calls", 0) - n0
                 stats["ooo"] = getattr(be, "out_of_order", 0)
+                stats["step2_ms"] = round(1000 * getattr(be, "step_s", 0.0), 1)
                 stats["active"] += len(be.active())
                 stats["occupied"] = stats.get("occupied", 0) + sum(1 for it in be.info if it is not None)
                 stats["queued"] = stats.get("queued", 0) + q.qsize()

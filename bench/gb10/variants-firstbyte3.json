@@ -1,0 +1,50 @@
+{
+ "base": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 0,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 0,
+  "F1_KEEP_MS": 80,
+  "TRIM_MAX_MS": 100
+ },
+ "a_f72": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 80,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 72,
+  "F1_KEEP_MS": 80,
+  "TRIM_MAX_MS": 100
+ },
+ "b_f72_k60": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 80,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 72,
+  "F1_KEEP_MS": 60,
+  "TRIM_MAX_MS": 100
+ },
+ "c_f100": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 100,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 100,
+  "F1_KEEP_MS": 80,
+  "TRIM_MAX_MS": 100
+ },
+ "d_nof1": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 80,
+  "FRESH1_FROM": 40,
+  "FRESH1_AT": 0,
+  "F1_KEEP_MS": 80,
+  "TRIM_MAX_MS": 100
+ },
+ "e_f16_k50": {
+  "K_LOW_FROM": 8,
+  "K_LOW_AT": 80,
+  "FRESH1_FROM": 16,
+  "FRESH1_AT": 72,
+  "F1_KEEP_MS": 50,
+  "TRIM_MAX_MS": 100
+ }
+}
