@@ -23,6 +23,7 @@ import os
 import torch
 import torch.nn.functional as F
 
+from uqt.graphs import capture_graph
 from uqt.wq import lin
 
 
@@ -423,7 +424,7 @@ class Engine:
         for n, v in zip(self._STATE, snap):
             getattr(self, n).copy_(v)
         g = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(g, pool=getattr(self, pool_attr)):
+        with capture_graph(g, getattr(self, pool_attr)):
             fn()
         setattr(self, pool_attr, g.pool())
         for n, v in zip(self._STATE, snap):
@@ -603,7 +604,7 @@ class Engine:
             torch.cuda.current_stream().wait_stream(s)
             g = torch.cuda.CUDAGraph()
             try:
-                with torch.cuda.graph(g, pool=self._dec_pool):
+                with capture_graph(g, self._dec_pool):
                     out = dec(inp)
             except Exception as e:  # decoder not capturable: fall back to eager for good
                 print(f"[uqt] decoder graph capture failed ({e!r}); using eager decoder")

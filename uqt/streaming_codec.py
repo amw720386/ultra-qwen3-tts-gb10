@@ -46,6 +46,8 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
+from uqt.graphs import capture_graph
+
 _KERNEL = 7
 _CUDA_SIN = torch.version.cuda is not None
 
@@ -1289,7 +1291,7 @@ class StreamingDecodeGraphs:
             sd(codes, slots, pos, initial=initial)
             torch.cuda.synchronize()
             graph = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(graph, pool=pool):
+            with capture_graph(graph, pool):
                 out = sd(codes, slots, pos, initial=initial)
             self.graphs[bsz] = (graph, codes, slots, pos, out)
         self.sizes = sorted(self.graphs)

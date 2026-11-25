@@ -18,6 +18,7 @@ import torch.nn.functional as F
 
 from uqt import kernels
 from uqt.engine import _rms, _rot_half
+from uqt.graphs import capture_graph
 from uqt.wq import lin
 
 
@@ -176,7 +177,7 @@ class BatchEngine:
             for n, v in zip(self._STATE, snap):
                 getattr(self, n).copy_(v)
             g = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(g, pool=self._pool):
+            with capture_graph(g, self._pool):
                 run()
             self._pool = g.pool()
             for n, v in zip(self._STATE, snap):
