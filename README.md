@@ -4,7 +4,7 @@
 
 # 🔊 ultra-qwen3-tts-gb10
 
-**Streaming Qwen3-TTS on one NVIDIA GB10, at 2.1× the throughput of sglang-omni.**
+**Streaming Qwen3-TTS on one NVIDIA GB10, at 3.1× the throughput of vLLM (vLLM-Omni 0.32).**
 
 [![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![model: Qwen3-TTS-12Hz-1.7B](https://img.shields.io/badge/model-Qwen3--TTS--12Hz--1.7B-6f42c1) ![GPU: NVIDIA GB10](https://img.shields.io/badge/GPU-NVIDIA%20GB10-76b900)
 
@@ -19,9 +19,9 @@ ultra-qwen3-tts-gb10 is a streaming inference engine for
 PyTorch, with a Go gateway that streams raw PCM over HTTP. Decode on this chip is limited by its 273 GB/s of unified memory, so most of
 the work goes into reading fewer bytes per step.
 
-[![Launch film: one grey figure speaks, the head opens to show the model running, 128 figures speak at once, and three crowds race to the first word](assets/launch-poster.jpg)](assets/launch.mp4)
+[![Launch film: one grey figure speaks, the head opens to show the model running, 128 figures speak at once, three crowds race to the first word, and two figures show how much more voice is generated in the same time](assets/launch-poster.jpg)](assets/launch.mp4)
 
-*Launch film (27 s). Click to play. The layer, step and stream counts, the start times and the throughput are the real ones. The speech, and which tiles light, are illustrative. Made with [`media/film.py`](media/film.py).*
+*Launch film (28 s). Click to play. The layer, step and stream counts, the start times and the throughput are the real ones. The last shot's two voices are drawn to the measured 3.1× ratio. The speech, and which tiles light, are illustrative. Made with [`media/film.py`](media/film.py).*
 
 <p align="center"><img src="assets/race.gif" width="900" alt="Three crowds of 128 press play together. Ours is heard after 0.32 s, sglang-omni after 4.77 s, and vLLM-Omni is still silent"></p>
 

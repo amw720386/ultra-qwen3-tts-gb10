@@ -6,7 +6,7 @@
  5.2  cut into the head: 28 Talker layers, 15 predictor steps, the codec, then the mouth
 12.0  pull out: 128 of them
 16.4  three crowds of 128 press play together, in real time
-23.0  the result
+23.0  two figures speak for the same time: ours has said 3.1 times as much as vLLM-Omni's
 """
 import math
 
@@ -14,12 +14,14 @@ import kit
 import numpy as np
 from mathutils import Vector
 
-DURATION = 27.0
+DURATION = 28.0
 S = {}
 COLS, ROWS = 8, 16
 DX, DY = 2.15, 1.25
 HERO = (2, 0)                                   # the figure of the first shot, in the crowd of the third
-RACE = 16.4
+RACE, END = 16.4, 23.0
+GROW, STEP, UNIT_LEN = 2.6, 0.052, 1.40         # last shot: seconds of growth, plate spacing, length of vLLM-Omni's voice
+RIVAL, FAR = (0.10, 2.6, 0.80), 1.206          # it stands behind, scaled up by the distance so both voices read at one scale
 FRAME = 0.08                                    # seconds of audio per frame
 N_VAR = 10
 WALLS = 28
@@ -75,6 +77,11 @@ def build(assets, data):
     S["ang"] = ang
     # voices
     S["plates"] = kit.Boxes("plates", 6000, S["blue"])
+    S["rival"] = kit.bust(assets, "rival", kit.clay("rivalm", sink=tuple(RIVAL[2] + FAR * z for z in SINK)), subdiv=2)
+    S["rival"].location, S["rival"].scale = RIVAL, (FAR,) * 3
+    S["rival"].color = (.045, .046, .05, 1)
+    S["grey"] = kit.flat("grey", (0.30, 0.32, 0.35, 1), 1.0)
+    S["plates2"] = kit.Boxes("plates2", 400, S["grey"])
     # inside the head
     S["walls"], S["hot"] = [], []
     T = 9
@@ -117,6 +124,9 @@ def build(assets, data):
         "crowd": kit.area("crowd", (8, 34, 17), (6, 8, 0), 34, 0, 12),
         "crowdf": kit.area("crowdf", (4, -22, 24), (6, 4, 0), 20, 0),
         "race": kit.area("race", (0, 52, 24), (0, 8, 0), 60, 0, 14),
+        "endb": kit.area("endb", (3.0, 9.0, 5.0), (2.0, 1.0, 0), 6, 0, 3),
+        "endl": kit.area("endl", (-3.2, -0.5, 2.2), (0, 1.0, 0), 2.0, 0, 2.4),
+        "endf": kit.area("endf", (1.0, -9, 5), (0.5, 1, 0), 8, 0),
         "racef": kit.area("racef", (0, -24, 26), (0, 6, 0), 40, 0),
     }
     return sc
@@ -148,6 +158,22 @@ def reveal(t, p):
     return kit.ramp(t, 12.15 + 0.055 * math.hypot(p[0], p[1]), 0.7)
 
 
+def grown(out, pos, t, seed, length, s=1.0):
+    """One voice in the last shot: plates laid from the mouth outwards, as many as were generated so far."""
+    m = S["mouth"]
+    u = kit.clamp((t - END - 0.7) / GROW)
+    done = length * (1 - (1 - u) ** 2.2)
+    for k in range(int(done / STEP) + 1):
+        x = k * STEP
+        pop = kit.ease((done - x) / 0.16)
+        if pop > 0.02:
+            e = kit.voice(k * FRAME + 0.11 * math.sin(1.7 * t + 0.35 * k), seed)
+            out[0].append((pos[0] + s * (m[0] + 0.12 + x), pos[1], pos[2] + s * (m[2] + 0.02)))
+            out[1].append((0.026 * s, 0.026 * s, (0.03 + 0.46 * e) * pop * s))
+            out[2].append(0.0)
+    return (pos[0] + s * (m[0] + 0.30 + done), pos[1], pos[2] + s * (m[2] + 0.02))
+
+
 def show(o, on):
     o.hide_render = not on
 
@@ -156,12 +182,14 @@ def frame(t):
     cam, L = S["cam"], S["L"]
     out = ([], [], [])
     anchors = {}
-    race = t >= RACE
+    race, last = t >= RACE, t >= END
+    two = ([], [], [])
     inside = 5.1 < t < 12.1
     crowd_on = 12.0 < t < RACE
     for o in S["inside"]:
         show(o, inside)
-    show(S["hero"], not race)
+    show(S["hero"], not race or last)
+    show(S["rival"], last)
     for o, _, _ in S["crowd"]:
         show(o, crowd_on)
     for b, rows in enumerate(S["blocks"]):
@@ -244,11 +272,23 @@ def frame(t):
         at = kit.path(t, [(0, (0.66, 0, -0.14)), (5.0, (0.50, 0, -0.14)), (7.4, (-0.10, 0, -0.02)), (11.3, (-0.04, 0, -0.03)), (13.0, (0.8, 0.4, -0.05)), (16.4, (5.2, 7.2, -0.9))])
         kit.look(cam, loc, at)
         cam.data.lens = kit.lerp(62, 42, pull)
+    elif last:
+        S["hero_mat"].node_tree.nodes["CLIP"].outputs[0].default_value = -99
+        on = kit.ramp(t, END, 0.8)
+        hush = 1 - kit.ramp(t, END + 0.6 + GROW, 0.5)
+        kit.speak(S["hero"].data.shape_keys.key_blocks, t, 0.0, hush)
+        kit.speak(S["rival"].data.shape_keys.key_blocks, t, 3.2, hush)
+        anchors["ours"] = grown(out, (0, 0, 0), t, 0.0, UNIT_LEN * S["data"]["throughput_vs"]["vllm"]["geomean"])
+        anchors["rival"] = grown(two, RIVAL, t, 3.2, UNIT_LEN, FAR)
+        L["endb"].data.energy, L["endl"].data.energy, L["endf"].data.energy = 1500 * on, 260 * on, 160 * on
+        kit.look(cam, kit.path(t, [(END, (1.6, -9.2, 2.6)), (END + 3.4, (2.35, -10.6, 3.3)), (DURATION, (2.5, -10.8, 3.35))]),
+                 kit.path(t, [(END, (1.5, 0.6, 0.3)), (END + 3.4, (2.25, 0.8, 0.42)), (DURATION, (2.4, 0.8, 0.42))]))
+        cam.data.lens = 46
     else:
         S["hero_mat"].node_tree.nodes["CLIP"].outputs[0].default_value = -99
         u = t - RACE
         starts = starts_of(S["data"])
-        end = kit.ramp(t, 22.4, 1.0)
+        end = kit.ramp(t, 22.3, 0.65)
         for b, rows in enumerate(S["blocks"]):
             talking = u >= starts[b]
             since = u - starts[b]
@@ -262,7 +302,7 @@ def frame(t):
                 o.color = (s, s * 1.02, s * 1.06, 1)
                 if talking:
                     ribbon(out, p, S["ang"], t, 0.7 + v * 0.83, RACE + starts[b], 0.80, 18)
-        dim = 1 - 0.975 * end
+        dim = 1 - end
         L["race"].data.energy, L["racef"].data.energy = 30000 * dim, 6500 * dim
         S["blue"].node_tree.nodes["Emission"].inputs[1].default_value = dim
         loc = kit.path(t, [(RACE, (-0.5, -13.4, 5.9)), (27.0, (0.5, -12.4, 5.3))])
@@ -270,9 +310,10 @@ def frame(t):
         cam.data.lens = 22.5
         for b in range(3):
             anchors[f"b{b}"] = ((b - 1) * 8.5 + 0.2, -1.0, -1.15)
-    if not race:
+    if not race or last:
         S["blue"].node_tree.nodes["Emission"].inputs[1].default_value = 1
     S["plates"].set(*out)
+    S["plates2"].set(*two)
     return anchors
 
 
@@ -324,10 +365,14 @@ def overlay(t, pts, data):
             out.append({"text": f"{min(u, s):.2f} s", "x": x, "y": y + 0.056, "size": 58, "anchor": "c", "a": k, "tnum": True, "color": "#3b82f6" if done and b == 0 else "#e8edf4" if done else "#8b97a8"})
         out.append({"text": "128 people press play. When does the voice start?", "x": 0.5, "y": 0.085, "size": 46, "anchor": "c", "a": k * (1.0 if u > 0.0 else 0)})
         out.append({"text": "Median time until the voice is heard, 128 clients on one GB10, shown in real time", "x": 0.5, "y": 0.962, "size": 24, "weight": "Regular", "anchor": "c", "a": k, "color": "#8b97a8"})
-        e = _e((t - 22.9) / 0.7)
-        v = data["throughput_vs"]["sglang"]["geomean"]
-        out.append({"text": f"{v:.1f}× sglang-omni's throughput.", "x": 0.5, "y": 0.40, "size": 96, "anchor": "c", "a": e})
-        out.append({"text": "Qwen3-TTS 1.7B on one GB10, geometric mean from 1 to 256 clients", "x": 0.5, "y": 0.49, "size": 29, "weight": "Regular", "anchor": "c", "a": _e((t - 23.4) / 0.6), "color": "#a3afc0"})
-        out.append({"text": "github.com/amw720386/ultra-qwen3-tts-gb10", "x": 0.5, "y": 0.575, "size": 31, "weight": "Regular", "anchor": "c", "a": _e((t - 23.9) / 0.6)})
-        out.append({"svg": "magni-lockup-on-dark.svg", "x": 0.5, "y": 0.80, "w": 250, "a": _e((t - 24.6) / 0.7)})
+    if t >= 23.0:
+        v = data["throughput_vs"]["vllm"]["geomean"]
+        out.append({"text": f"{v:.1f}× vLLM's throughput.", "x": 0.5, "y": 0.135, "size": 92, "anchor": "c", "a": _e((t - 25.6) / 0.6)})
+        out.append({"text": "Qwen3-TTS 1.7B against vLLM-Omni 0.32 on one GB10, geometric mean from 1 to 256 clients", "x": 0.5, "y": 0.212, "size": 27, "weight": "Regular", "anchor": "c", "a": _e((t - 25.9) / 0.6), "color": "#a3afc0"})
+        for key, name, c in (("ours", "Ours", "#e8edf4"), ("rival", "vLLM-Omni", "#8b97a8")):
+            if key in pts:
+                x, y = pts[key]
+                out.append({"text": name, "x": x, "y": y, "size": 32, "weight": "Regular", "a": _e((t - 23.9) / 0.5), "color": c})
+        out.append({"text": "github.com/amw720386/ultra-qwen3-tts-gb10", "x": 0.047, "y": 0.93, "size": 30, "weight": "Regular", "a": _e((t - 26.2) / 0.6)})
+        out.append({"svg": "magni-lockup-on-dark.svg", "x": 0.885, "y": 0.92, "w": 230, "a": _e((t - 26.2) / 0.6)})
     return out
