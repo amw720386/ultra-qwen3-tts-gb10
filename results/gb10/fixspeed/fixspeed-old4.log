@@ -1,0 +1,238 @@
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Fetching 4 files: 100%|██████████| 4/4 [00:00<00:00, 110376.42it/s]
+[uqt.engine_proc] self-warm (1, 16, 64, 256, 512) in 22s
+[uqt.engine_proc] warm in 780s, waiting for gateway on /tmp/uqt.sock
+2026/11/25 13:25:49 uqt-gw listening on 127.0.0.1:8091
+2026/11/25 13:25:49 engine ready
+[uqt.hops p90 ms] {"recv_to_admit": 1.1, "admit_to_first": 30.2}
+[uqt.stats] {"iters": 1, "admit": 0.92, "gen": 30.3, "dec": 0.01, "send": 0.02, "dec_calls": 0.0, "admitted": 1, "active": 1.0, "latewait": 0.0, "ooo": 0, "step2_ms": 0.0, "occupied": 1.0, "queued": 0.0}
+h2h-load {"n": 1, "n_ok": 1, "ttfa_ms_p50": 35.90537200216204, "ttfa_ms_p90": 35.90537200216204, "ttfa_ms_p99": 35.90537200216204, "ttfa_voiced_ms_p50": 35.90537200216204, "ttfa_voiced_ms_p90": 35.90537200216204, "rtf_p50": 0.12138137187321263, "rtf_p90": 0.12138137187321263, "total_rtf_p50": 0.12699158624855045, "underrun_frac": 0.0, "heard_ms_p50": 45.90537200216204, "heard_ms_p90": 45.90537200216204, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 0.0, "late_ms_max": 0.0, "first_late_at_s_p50": null, "first_late_at_s_p90": null, "first_chunk_ms_p50": 80.0, "late_gt20ms_frac": 0.0, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 3.9424719871021807, "hdr_ms_p90": 3.9424719871021807, "C": 1, "procs": 1, "wall_s": 0.8166306018829346, "audio_s": 6.4, "throughput_audio_s_per_s": 7.837080786886127, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 30.2}
+[uqt.stats] {"iters": 41, "admit": 0.02, "gen": 8.57, "dec": 0.76, "send": 0.01, "dec_calls": 0.2, "admitted": 1, "active": 1.0, "latewait": 10.33, "ooo": 0, "step2_ms": 19.2, "occupied": 1.0, "queued": 0.0, "collect": 7.22}
+[uqt.hops p90 ms] {"recv_to_admit": 52.0, "admit_to_first": 138.8}
+[uqt.stats] {"iters": 92, "admit": 1.41, "gen": 8.62, "dec": 4.0, "send": 0.02, "dec_calls": 0.8, "admitted": 15, "active": 13.5, "latewait": 7.99, "ooo": 0, "step2_ms": 32.7, "occupied": 13.5, "queued": 0.1, "collect": 5.65}
+h2h-load {"n": 16, "n_ok": 16, "ttfa_ms_p50": 94.04194849776104, "ttfa_ms_p90": 186.49870497756638, "ttfa_ms_p99": 192.0809305709554, "ttfa_voiced_ms_p50": 94.04194849776104, "ttfa_voiced_ms_p90": 186.49870497756638, "rtf_p50": 0.21410760455415956, "rtf_p90": 0.24374199702055366, "total_rtf_p50": 0.2359736683599924, "underrun_frac": 0.25, "heard_ms_p50": 178.8101675081998, "heard_ms_p90": 252.4777849984821, "late_ms_p50": 0.0, "late_ms_p90": 53.18278548656963, "late_ms_p99": 62.211846755235456, "late_ms_max": 63.70482494821772, "first_late_at_s_p50": 0.08, "first_late_at_s_p90": 0.087, "first_chunk_ms_p50": 160.0, "late_gt20ms_frac": 0.25, "late_gt50ms_frac": 0.1875, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.865354977780953, "hdr_ms_p90": 2.2155904734972864, "C": 16, "procs": 1, "wall_s": 2.9054489135742188, "audio_s": 119.75, "throughput_audio_s_per_s": 41.21566186916231, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 31.0}
+[uqt.stats] {"iters": 85, "admit": 0.02, "gen": 7.95, "dec": 1.18, "send": 0.01, "dec_calls": 0.3, "admitted": 2, "active": 1.7, "latewait": 14.12, "ooo": 0, "step2_ms": 19.2, "occupied": 1.7, "queued": 0.0, "collect": 6.68}
+[uqt.hops p90 ms] {"recv_to_admit": 1.4, "admit_to_first": 31.2}
+[uqt.stats] {"iters": 100, "admit": 0.03, "gen": 8.96, "dec": 0.74, "send": 0.01, "dec_calls": 0.2, "admitted": 4, "active": 1.0, "latewait": 9.92, "ooo": 0, "step2_ms": 18.7, "occupied": 1.0, "queued": 0.0, "collect": 6.83}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 31.6}
+[uqt.stats] {"iters": 102, "admit": 0.02, "gen": 8.28, "dec": 0.69, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.42, "ooo": 0, "step2_ms": 19.3, "occupied": 1.0, "queued": 0.0, "collect": 7.2}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 31.3}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.31, "dec": 0.67, "send": 0.01, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.5, "ooo": 0, "step2_ms": 19.0, "occupied": 1.0, "queued": 0.0, "collect": 7.18}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 30.9}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.25, "dec": 0.68, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.55, "ooo": 0, "step2_ms": 18.9, "occupied": 1.0, "queued": 0.0, "collect": 7.14}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 31.4}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.3, "dec": 0.7, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.46, "ooo": 0, "step2_ms": 19.1, "occupied": 1.0, "queued": 0.0, "collect": 7.19}
+[uqt.hops p90 ms] {"recv_to_admit": 1.3, "admit_to_first": 31.5}
+[uqt.stats] {"iters": 102, "admit": 0.01, "gen": 7.96, "dec": 0.61, "send": 0.0, "dec_calls": 0.1, "admitted": 1, "active": 1.0, "latewait": 10.92, "ooo": 0, "step2_ms": 19.1, "occupied": 1.0, "queued": 0.0, "collect": 7.35}
+[uqt.hops p90 ms] {"recv_to_admit": 1.1, "admit_to_first": 31.0}
+[uqt.stats] {"iters": 100, "admit": 0.02, "gen": 8.35, "dec": 0.72, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.51, "ooo": 0, "step2_ms": 18.8, "occupied": 1.0, "queued": 0.0, "collect": 7.15}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 30.9}
+[uqt.stats] {"iters": 99, "admit": 0.02, "gen": 8.66, "dec": 0.77, "send": 0.0, "dec_calls": 0.2, "admitted": 3, "active": 1.0, "latewait": 10.18, "ooo": 0, "step2_ms": 18.8, "occupied": 1.0, "queued": 0.0, "collect": 7.01}
+[uqt.hops p90 ms] {"recv_to_admit": 1.1, "admit_to_first": 31.7}
+[uqt.stats] {"iters": 100, "admit": 0.03, "gen": 8.67, "dec": 0.73, "send": 0.01, "dec_calls": 0.2, "admitted": 3, "active": 1.0, "latewait": 10.14, "ooo": 0, "step2_ms": 18.9, "occupied": 1.0, "queued": 0.0, "collect": 7.0}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 31.0}
+[uqt.stats] {"iters": 103, "admit": 0.01, "gen": 7.93, "dec": 0.66, "send": 0.0, "dec_calls": 0.2, "admitted": 1, "active": 1.0, "latewait": 10.79, "ooo": 0, "step2_ms": 18.8, "occupied": 1.0, "queued": 0.0, "collect": 7.32}
+[uqt.hops p90 ms] {"recv_to_admit": 1.2, "admit_to_first": 31.1}
+[uqt.stats] {"iters": 99, "admit": 0.03, "gen": 8.73, "dec": 0.75, "send": 0.01, "dec_calls": 0.2, "admitted": 3, "active": 1.0, "latewait": 10.12, "ooo": 0, "step2_ms": 19.3, "occupied": 1.0, "queued": 0.0, "collect": 6.98}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 31.0}
+[uqt.stats] {"iters": 102, "admit": 0.02, "gen": 8.24, "dec": 0.66, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.52, "ooo": 0, "step2_ms": 18.8, "occupied": 1.0, "queued": 0.0, "collect": 7.15}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 31.0}
+[uqt.stats] {"iters": 103, "admit": 0.01, "gen": 7.98, "dec": 0.62, "send": 0.0, "dec_calls": 0.1, "admitted": 1, "active": 1.0, "latewait": 10.8, "ooo": 0, "step2_ms": 19.3, "occupied": 1.0, "queued": 0.0, "collect": 7.37}
+[uqt.hops p90 ms] {"recv_to_admit": 1.3, "admit_to_first": 32.3}
+[uqt.stats] {"iters": 100, "admit": 0.03, "gen": 8.37, "dec": 0.73, "send": 0.01, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.49, "ooo": 0, "step2_ms": 19.4, "occupied": 1.0, "queued": 0.0, "collect": 7.16}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 32.3}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.29, "dec": 0.65, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.61, "ooo": 0, "step2_ms": 19.1, "occupied": 1.0, "queued": 0.0, "collect": 7.18}
+[uqt.hops p90 ms] {"recv_to_admit": 1.1, "admit_to_first": 31.5}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.34, "dec": 0.76, "send": 0.01, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.32, "ooo": 0, "step2_ms": 19.4, "occupied": 1.0, "queued": 0.0, "collect": 7.1}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 30.8}
+[uqt.stats] {"iters": 100, "admit": 0.03, "gen": 8.58, "dec": 0.77, "send": 0.0, "dec_calls": 0.2, "admitted": 3, "active": 1.0, "latewait": 10.18, "ooo": 0, "step2_ms": 19.2, "occupied": 1.0, "queued": 0.0, "collect": 6.99}
+[uqt.hops p90 ms] {"recv_to_admit": 1.2, "admit_to_first": 30.9}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.28, "dec": 0.66, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.52, "ooo": 0, "step2_ms": 19.0, "occupied": 1.0, "queued": 0.0, "collect": 7.18}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 31.5}
+[uqt.stats] {"iters": 101, "admit": 0.02, "gen": 8.3, "dec": 0.7, "send": 0.0, "dec_calls": 0.2, "admitted": 2, "active": 1.0, "latewait": 10.47, "ooo": 0, "step2_ms": 19.3, "occupied": 1.0, "queued": 0.0, "collect": 7.19}
+latency {"n": 40, "n_ok": 40, "ttfa_ms_p50": 33.946937997825444, "ttfa_ms_p90": 34.75670292391442, "ttfa_ms_p99": 35.682574392994866, "ttfa_voiced_ms_p50": 33.946937997825444, "ttfa_voiced_ms_p90": 34.75670292391442, "rtf_p50": 0.12108374288635043, "rtf_p90": 0.12234292309271308, "total_rtf_p50": 0.1255606318131539, "underrun_frac": 0.0, "heard_ms_p50": 44.00160348974168, "heard_ms_p90": 44.94446788681671, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 0.0, "late_ms_max": 0.0, "first_late_at_s_p50": null, "first_late_at_s_p90": null, "first_chunk_ms_p50": 80.0, "late_gt20ms_frac": 0.0, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.15692347753793, "hdr_ms_p90": 1.5714037755969912}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 30.2}
+[uqt.stats] {"iters": 25, "admit": 0.03, "gen": 8.56, "dec": 0.64, "send": 0.0, "dec_calls": 0.2, "admitted": 1, "active": 1.0, "latewait": 10.58, "ooo": 0, "step2_ms": 20.0, "occupied": 1.0, "queued": 0.1, "collect": 7.23}
+[uqt.hops p90 ms] {"recv_to_admit": 56.4, "admit_to_first": 122.2}
+[uqt.stats] {"iters": 71, "admit": 5.45, "gen": 5.52, "dec": 3.35, "send": 0.03, "dec_calls": 1.4, "admitted": 41, "active": 29.8, "latewait": 14.13, "ooo": 0, "step2_ms": 61.6, "occupied": 29.9, "queued": 0.3, "collect": 3.62}
+[uqt.hops p90 ms] {"recv_to_admit": 15.0, "admit_to_first": 99.2}
+[uqt.stats] {"iters": 75, "admit": 5.73, "gen": 2.34, "dec": 4.76, "send": 0.03, "dec_calls": 2.1, "admitted": 28, "active": 31.3, "latewait": 13.91, "ooo": 0, "step2_ms": 45.9, "occupied": 31.6, "queued": 0.0, "collect": 2.19}
+[uqt.hops p90 ms] {"recv_to_admit": 16.6, "admit_to_first": 88.0}
+[uqt.stats] {"iters": 79, "admit": 4.01, "gen": 4.01, "dec": 4.19, "send": 0.03, "dec_calls": 1.8, "admitted": 24, "active": 30.0, "latewait": 13.16, "ooo": 0, "step2_ms": 61.0, "occupied": 30.4, "queued": 0.0, "collect": 3.86}
+[uqt.hops p90 ms] {"recv_to_admit": 25.7, "admit_to_first": 83.2}
+[uqt.stats] {"iters": 95, "admit": 0.62, "gen": 6.15, "dec": 2.35, "send": 0.02, "dec_calls": 0.7, "admitted": 2, "active": 15.4, "latewait": 11.96, "ooo": 0, "step2_ms": 35.9, "occupied": 15.5, "queued": 0.0, "collect": 5.99}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 98.80735850310884, "ttfa_ms_p90": 133.33762148977257, "ttfa_ms_p99": 197.09223501849914, "ttfa_voiced_ms_p50": 98.82786049274728, "ttfa_voiced_ms_p90": 133.33762148977257, "rtf_p50": 0.3141883453548736, "rtf_p90": 0.3317557588197282, "total_rtf_p50": 0.32773819868099574, "underrun_frac": 0.0625, "heard_ms_p50": 148.68554448708892, "heard_ms_p90": 218.93077998887748, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 24.42124114313623, "late_ms_max": 42.88477898808196, "first_late_at_s_p50": 0.08, "first_late_at_s_p90": 0.08, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.03125, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.4423579850699753, "hdr_ms_p90": 1.9365465268492699, "C": 32, "procs": 1, "wall_s": 9.308420658111572, "audio_s": 678.37, "throughput_audio_s_per_s": 72.87702446159358, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.5, "admit_to_first": 73.3}
+[uqt.stats] {"iters": 41, "admit": 0.43, "gen": 8.26, "dec": 1.06, "send": 0.01, "dec_calls": 0.2, "admitted": 4, "active": 1.4, "latewait": 21.86, "ooo": 0, "step2_ms": 29.2, "occupied": 1.4, "queued": 1.0, "collect": 6.71}
+[uqt.hops p90 ms] {"recv_to_admit": 1255.2, "admit_to_first": 299.4}
+[uqt.stats] {"iters": 15, "admit": 45.53, "gen": 4.35, "dec": 35.66, "send": 0.34, "dec_calls": 1.7, "admitted": 240, "active": 132.0, "latewait": 51.14, "ooo": 0, "step2_ms": 166.5, "occupied": 132.0, "queued": 96.9, "collect": 0.09}
+[uqt.hops p90 ms] {"recv_to_admit": 1734.3, "admit_to_first": 293.6}
+[uqt.stats] {"iters": 13, "admit": 7.36, "gen": 1.76, "dec": 70.36, "send": 0.75, "dec_calls": 1.9, "admitted": 15, "active": 255.5, "latewait": 75.04, "ooo": 0, "step2_ms": 155.3, "occupied": 255.7, "queued": 0.0, "collect": 1.01}
+[uqt.hops p90 ms] {"recv_to_admit": 75.6, "admit_to_first": 262.3}
+[uqt.stats] {"iters": 12, "admit": 14.93, "gen": 0.71, "dec": 71.58, "send": 0.74, "dec_calls": 2.0, "admitted": 28, "active": 251.9, "latewait": 79.45, "ooo": 0, "step2_ms": 169.2, "occupied": 253.3, "queued": 0.0, "collect": 0.18}
+[uqt.hops p90 ms] {"recv_to_admit": 79.4, "admit_to_first": 278.5}
+[uqt.stats] {"iters": 12, "admit": 23.72, "gen": 0.73, "dec": 67.27, "send": 0.66, "dec_calls": 1.2, "admitted": 88, "active": 245.1, "latewait": 83.16, "ooo": 0, "step2_ms": 180.0, "occupied": 248.7, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 100.7, "admit_to_first": 262.6}
+[uqt.stats] {"iters": 12, "admit": 22.4, "gen": 0.57, "dec": 54.71, "send": 0.61, "dec_calls": 2.6, "admitted": 75, "active": 245.6, "latewait": 91.04, "ooo": 0, "step2_ms": 169.1, "occupied": 249.8, "queued": 0.0, "collect": 0.15}
+[uqt.hops p90 ms] {"recv_to_admit": 111.2, "admit_to_first": 254.4}
+[uqt.stats] {"iters": 12, "admit": 22.96, "gen": 0.57, "dec": 44.74, "send": 0.64, "dec_calls": 3.5, "admitted": 71, "active": 244.8, "latewait": 107.33, "ooo": 0, "step2_ms": 174.5, "occupied": 250.2, "queued": 0.0, "collect": 0.16}
+[uqt.hops p90 ms] {"recv_to_admit": 122.8, "admit_to_first": 324.0}
+[uqt.stats] {"iters": 12, "admit": 35.02, "gen": 0.62, "dec": 32.25, "send": 0.81, "dec_calls": 3.4, "admitted": 53, "active": 246.5, "latewait": 107.97, "ooo": 0, "step2_ms": 174.5, "occupied": 250.8, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 130.2, "admit_to_first": 326.1}
+[uqt.stats] {"iters": 12, "admit": 31.02, "gen": 0.6, "dec": 26.64, "send": 0.83, "dec_calls": 3.3, "admitted": 54, "active": 245.2, "latewait": 112.7, "ooo": 0, "step2_ms": 166.5, "occupied": 250.1, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 254.3, "admit_to_first": 336.7}
+[uqt.stats] {"iters": 11, "admit": 24.58, "gen": 14.99, "dec": 52.69, "send": 1.18, "dec_calls": 3.7, "admitted": 58, "active": 234.8, "latewait": 91.96, "ooo": 0, "step2_ms": 202.8, "occupied": 241.0, "queued": 1.0, "collect": 14.43}
+[uqt.hops p90 ms] {"recv_to_admit": 187.0, "admit_to_first": 375.5}
+[uqt.stats] {"iters": 13, "admit": 24.34, "gen": 6.43, "dec": 49.13, "send": 0.78, "dec_calls": 3.2, "admitted": 40, "active": 215.4, "latewait": 83.75, "ooo": 0, "step2_ms": 160.9, "occupied": 221.2, "queued": 0.2, "collect": 5.95}
+[uqt.hops p90 ms] {"recv_to_admit": 120.7, "admit_to_first": 279.6}
+[uqt.stats] {"iters": 13, "admit": 22.95, "gen": 9.84, "dec": 26.65, "send": 0.7, "dec_calls": 3.1, "admitted": 26, "active": 172.6, "latewait": 103.82, "ooo": 0, "step2_ms": 161.1, "occupied": 177.9, "queued": 0.0, "collect": 9.37}
+[uqt.hops p90 ms] {"recv_to_admit": 102.3, "admit_to_first": 267.7}
+[uqt.stats] {"iters": 14, "admit": 19.14, "gen": 3.82, "dec": 28.0, "send": 0.48, "dec_calls": 2.4, "admitted": 11, "active": 126.7, "latewait": 97.88, "ooo": 0, "step2_ms": 151.4, "occupied": 130.1, "queued": 0.0, "collect": 3.36}
+[uqt.hops p90 ms] {"recv_to_admit": 105.5, "admit_to_first": 157.5}
+[uqt.stats] {"iters": 18, "admit": 3.11, "gen": 5.19, "dec": 19.17, "send": 0.21, "dec_calls": 3.1, "admitted": 3, "active": 76.3, "latewait": 83.99, "ooo": 0, "step2_ms": 103.8, "occupied": 78.6, "queued": 0.0, "collect": 4.45}
+[uqt.hops p90 ms] {"recv_to_admit": 41.6, "admit_to_first": 146.8}
+[uqt.stats] {"iters": 37, "admit": 1.38, "gen": 6.46, "dec": 5.59, "send": 0.05, "dec_calls": 2.1, "admitted": 2, "active": 33.7, "latewait": 40.63, "ooo": 0, "step2_ms": 95.9, "occupied": 34.9, "queued": 0.0, "collect": 6.18}
+[uqt.hops p90 ms] {"recv_to_admit": null, "admit_to_first": null}
+[uqt.stats] {"iters": 53, "admit": 0.01, "gen": 5.16, "dec": 4.6, "send": 0.02, "dec_calls": 0.8, "admitted": 0, "active": 9.9, "latewait": 28.6, "ooo": 0, "step2_ms": 41.6, "occupied": 9.9, "queued": 0.0, "collect": 4.86}
+h2h-load {"n": 768, "n_ok": 768, "ttfa_ms_p50": 350.8283145201858, "ttfa_ms_p90": 1244.327382690972, "ttfa_ms_p99": 1989.116301556933, "ttfa_voiced_ms_p50": 351.2726280023344, "ttfa_voiced_ms_p90": 1287.9053044132984, "rtf_p50": 1.0668040341920784, "rtf_p90": 1.126173807859469, "total_rtf_p50": 1.1537398637708738, "underrun_frac": 0.9609375, "heard_ms_p50": 441.58508253516624, "heard_ms_p90": 1387.8655787780958, "late_ms_p50": 1631.8274149962235, "late_ms_p90": 2063.4329330641776, "late_ms_p99": 2349.056904108147, "late_ms_max": 2527.372586017009, "first_late_at_s_p50": 0.16, "first_late_at_s_p90": 1.28, "first_chunk_ms_p50": 160.0, "late_gt20ms_frac": 0.9361979166666666, "late_gt50ms_frac": 0.8984375, "late_gt100ms_frac": 0.8567708333333334, "late_gt200ms_frac": 0.74609375, "late_gt500ms_frac": 0.6263020833333334, "hdr_ms_p50": 1.977913489099592, "hdr_ms_p90": 4.739786416757853, "C": 256, "procs": 8, "wall_s": 31.81985569000244, "audio_s": 5451.74, "throughput_audio_s_per_s": 171.3313867011941, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.2, "admit_to_first": 31.6}
+[uqt.stats] {"iters": 24, "admit": 0.06, "gen": 7.23, "dec": 1.25, "send": 0.01, "dec_calls": 0.2, "admitted": 1, "active": 1.6, "latewait": 24.05, "ooo": 0, "step2_ms": 29.2, "occupied": 1.6, "queued": 0.1, "collect": 5.47}
+[uqt.hops p90 ms] {"recv_to_admit": 52.2, "admit_to_first": 120.8}
+[uqt.stats] {"iters": 72, "admit": 4.34, "gen": 6.1, "dec": 3.48, "send": 0.02, "dec_calls": 1.2, "admitted": 39, "active": 29.9, "latewait": 13.93, "ooo": 0, "step2_ms": 64.6, "occupied": 30.0, "queued": 0.3, "collect": 4.26}
+[uqt.hops p90 ms] {"recv_to_admit": 17.3, "admit_to_first": 103.8}
+[uqt.stats] {"iters": 75, "admit": 6.06, "gen": 2.53, "dec": 4.82, "send": 0.03, "dec_calls": 2.0, "admitted": 29, "active": 31.2, "latewait": 13.68, "ooo": 0, "step2_ms": 59.2, "occupied": 31.6, "queued": 0.0, "collect": 2.39}
+[uqt.hops p90 ms] {"recv_to_admit": 16.2, "admit_to_first": 85.6}
+[uqt.stats] {"iters": 78, "admit": 4.54, "gen": 3.45, "dec": 3.64, "send": 0.03, "dec_calls": 1.9, "admitted": 20, "active": 30.1, "latewait": 14.13, "ooo": 0, "step2_ms": 56.3, "occupied": 30.4, "queued": 0.0, "collect": 3.29}
+[uqt.hops p90 ms] {"recv_to_admit": 28.4, "admit_to_first": 80.1}
+[uqt.stats] {"iters": 95, "admit": 0.73, "gen": 7.13, "dec": 2.0, "send": 0.02, "dec_calls": 0.9, "admitted": 7, "active": 17.1, "latewait": 11.16, "ooo": 0, "step2_ms": 37.7, "occupied": 17.2, "queued": 0.0, "collect": 6.37}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 100.56039149640128, "ttfa_ms_p90": 134.1109100030735, "ttfa_ms_p99": 198.43912866490422, "ttfa_voiced_ms_p50": 100.99685148452409, "ttfa_voiced_ms_p90": 134.1109100030735, "rtf_p50": 0.31551601164307147, "rtf_p90": 0.33552931480400416, "total_rtf_p50": 0.33013683472701694, "underrun_frac": 0.041666666666666664, "heard_ms_p50": 165.99988350644708, "heard_ms_p90": 219.76308601559143, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 22.369833302218442, "late_ms_max": 31.01348993368447, "first_late_at_s_p50": 0.08499999999999999, "first_late_at_s_p90": 0.09, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.020833333333333332, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.2230344873387367, "hdr_ms_p90": 1.6823030018713325, "C": 32, "procs": 1, "wall_s": 9.486955165863037, "audio_s": 699.86, "throughput_audio_s_per_s": 73.77077131325656, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 30.6}
+[uqt.stats] {"iters": 57, "admit": 0.02, "gen": 6.64, "dec": 1.53, "send": 0.01, "dec_calls": 0.3, "admitted": 1, "active": 1.9, "latewait": 16.76, "ooo": 0, "step2_ms": 19.2, "occupied": 1.9, "queued": 0.0, "collect": 5.98}
+[uqt.hops p90 ms] {"recv_to_admit": 50.3, "admit_to_first": 122.0}
+[uqt.stats] {"iters": 71, "admit": 4.92, "gen": 5.82, "dec": 3.73, "send": 0.03, "dec_calls": 1.3, "admitted": 41, "active": 29.7, "latewait": 13.89, "ooo": 0, "step2_ms": 59.7, "occupied": 29.9, "queued": 0.3, "collect": 3.95}
+[uqt.hops p90 ms] {"recv_to_admit": 16.8, "admit_to_first": 102.3}
+[uqt.stats] {"iters": 74, "admit": 5.6, "gen": 3.03, "dec": 4.77, "send": 0.04, "dec_calls": 2.1, "admitted": 30, "active": 31.2, "latewait": 13.62, "ooo": 0, "step2_ms": 49.1, "occupied": 31.6, "queued": 0.0, "collect": 2.77}
+[uqt.hops p90 ms] {"recv_to_admit": 18.6, "admit_to_first": 83.1}
+[uqt.stats] {"iters": 81, "admit": 3.94, "gen": 3.78, "dec": 4.4, "send": 0.04, "dec_calls": 1.9, "admitted": 18, "active": 30.3, "latewait": 12.78, "ooo": 0, "step2_ms": 44.4, "occupied": 30.6, "queued": 0.0, "collect": 3.53}
+[uqt.hops p90 ms] {"recv_to_admit": 20.6, "admit_to_first": 79.2}
+[uqt.stats] {"iters": 101, "admit": 1.08, "gen": 6.41, "dec": 3.1, "send": 0.03, "dec_calls": 0.9, "admitted": 6, "active": 15.0, "latewait": 9.31, "ooo": 0, "step2_ms": 34.8, "occupied": 15.1, "queued": 0.0, "collect": 6.01}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 101.03808899293654, "ttfa_ms_p90": 134.46573301916942, "ttfa_ms_p99": 198.77910559007427, "ttfa_voiced_ms_p50": 101.03808899293654, "ttfa_voiced_ms_p90": 134.46573301916942, "rtf_p50": 0.3094436133460776, "rtf_p90": 0.339821029120135, "total_rtf_p50": 0.32562143926332476, "underrun_frac": 0.041666666666666664, "heard_ms_p50": 131.0265124880243, "heard_ms_p90": 215.81793350283988, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 21.27689241024193, "late_ms_max": 43.627911945804954, "first_late_at_s_p50": 0.08, "first_late_at_s_p90": 0.087, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.020833333333333332, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.4836210175417364, "hdr_ms_p90": 2.620543004013598, "C": 32, "procs": 1, "wall_s": 9.820574760437012, "audio_s": 694.41, "throughput_audio_s_per_s": 70.709710677779, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.2, "admit_to_first": 72.0}
+[uqt.stats] {"iters": 58, "admit": 0.32, "gen": 8.4, "dec": 1.54, "send": 0.02, "dec_calls": 0.3, "admitted": 4, "active": 2.0, "latewait": 20.67, "ooo": 0, "step2_ms": 28.8, "occupied": 2.0, "queued": 0.7, "collect": 7.02}
+[uqt.hops p90 ms] {"recv_to_admit": 1241.1, "admit_to_first": 292.4}
+[uqt.stats] {"iters": 15, "admit": 46.58, "gen": 3.32, "dec": 38.76, "send": 0.24, "dec_calls": 1.3, "admitted": 240, "active": 132.0, "latewait": 46.81, "ooo": 0, "step2_ms": 167.4, "occupied": 132.0, "queued": 96.5, "collect": 0.08}
+[uqt.hops p90 ms] {"recv_to_admit": 1717.1, "admit_to_first": 274.5}
+[uqt.stats] {"iters": 13, "admit": 7.21, "gen": 3.7, "dec": 69.25, "send": 0.66, "dec_calls": 1.5, "admitted": 16, "active": 255.3, "latewait": 74.24, "ooo": 0, "step2_ms": 162.5, "occupied": 255.6, "queued": 0.0, "collect": 2.95}
+[uqt.hops p90 ms] {"recv_to_admit": 79.2, "admit_to_first": 254.1}
+[uqt.stats] {"iters": 12, "admit": 17.07, "gen": 0.64, "dec": 65.83, "send": 0.72, "dec_calls": 1.0, "admitted": 37, "active": 250.2, "latewait": 83.66, "ooo": 0, "step2_ms": 171.0, "occupied": 252.2, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 79.7, "admit_to_first": 265.7}
+[uqt.stats] {"iters": 12, "admit": 21.89, "gen": 0.62, "dec": 65.89, "send": 0.66, "dec_calls": 1.0, "admitted": 82, "active": 246.6, "latewait": 84.32, "ooo": 0, "step2_ms": 174.4, "occupied": 249.4, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 86.0, "admit_to_first": 264.0}
+[uqt.stats] {"iters": 12, "admit": 21.21, "gen": 0.64, "dec": 59.81, "send": 0.62, "dec_calls": 2.2, "admitted": 73, "active": 245.8, "latewait": 87.91, "ooo": 0, "step2_ms": 174.6, "occupied": 250.0, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 126.0, "admit_to_first": 264.4}
+[uqt.stats] {"iters": 12, "admit": 23.3, "gen": 0.62, "dec": 40.53, "send": 0.68, "dec_calls": 3.8, "admitted": 71, "active": 244.3, "latewait": 113.75, "ooo": 0, "step2_ms": 183.4, "occupied": 249.9, "queued": 0.0, "collect": 0.18}
+[uqt.hops p90 ms] {"recv_to_admit": 136.7, "admit_to_first": 271.1}
+[uqt.stats] {"iters": 12, "admit": 26.17, "gen": 0.57, "dec": 37.06, "send": 0.69, "dec_calls": 3.1, "admitted": 55, "active": 247.5, "latewait": 110.37, "ooo": 0, "step2_ms": 176.2, "occupied": 251.5, "queued": 0.0, "collect": 0.16}
+[uqt.hops p90 ms] {"recv_to_admit": 135.3, "admit_to_first": 366.2}
+[uqt.stats] {"iters": 11, "admit": 39.33, "gen": 0.71, "dec": 39.32, "send": 0.96, "dec_calls": 3.5, "admitted": 49, "active": 241.8, "latewait": 106.82, "ooo": 0, "step2_ms": 209.7, "occupied": 247.7, "queued": 0.0, "collect": 0.19}
+[uqt.hops p90 ms] {"recv_to_admit": 117.3, "admit_to_first": 351.9}
+[uqt.stats] {"iters": 13, "admit": 30.48, "gen": 0.53, "dec": 41.48, "send": 0.66, "dec_calls": 3.3, "admitted": 68, "active": 230.9, "latewait": 94.99, "ooo": 0, "step2_ms": 164.8, "occupied": 237.1, "queued": 0.0, "collect": 0.15}
+[uqt.hops p90 ms] {"recv_to_admit": 126.5, "admit_to_first": 366.6}
+[uqt.stats] {"iters": 11, "admit": 42.2, "gen": 0.65, "dec": 27.45, "send": 0.96, "dec_calls": 3.3, "admitted": 39, "active": 209.3, "latewait": 113.31, "ooo": 0, "step2_ms": 207.5, "occupied": 214.8, "queued": 0.0, "collect": 0.16}
+[uqt.hops p90 ms] {"recv_to_admit": 126.1, "admit_to_first": 308.2}
+[uqt.stats] {"iters": 14, "admit": 9.9, "gen": 8.48, "dec": 45.23, "send": 0.47, "dec_calls": 2.6, "admitted": 18, "active": 178.4, "latewait": 85.78, "ooo": 0, "step2_ms": 138.3, "occupied": 182.2, "queued": 0.1, "collect": 7.91}
+[uqt.hops p90 ms] {"recv_to_admit": 101.3, "admit_to_first": 358.2}
+[uqt.stats] {"iters": 14, "admit": 13.14, "gen": 6.62, "dec": 40.4, "send": 0.65, "dec_calls": 3.1, "admitted": 9, "active": 128.4, "latewait": 88.15, "ooo": 0, "step2_ms": 139.2, "occupied": 132.1, "queued": 0.1, "collect": 5.88}
+[uqt.hops p90 ms] {"recv_to_admit": 95.5, "admit_to_first": 192.6}
+[uqt.stats] {"iters": 22, "admit": 3.74, "gen": 6.0, "dec": 18.88, "send": 0.18, "dec_calls": 3.2, "admitted": 5, "active": 64.2, "latewait": 64.57, "ooo": 0, "step2_ms": 124.3, "occupied": 66.4, "queued": 0.0, "collect": 5.29}
+[uqt.hops p90 ms] {"recv_to_admit": 38.6, "admit_to_first": 103.3}
+[uqt.stats] {"iters": 36, "admit": 0.63, "gen": 6.36, "dec": 4.92, "send": 0.07, "dec_calls": 2.5, "admitted": 1, "active": 28.3, "latewait": 44.75, "ooo": 0, "step2_ms": 105.0, "occupied": 29.3, "queued": 0.0, "collect": 5.89}
+[uqt.hops p90 ms] {"recv_to_admit": 31.6, "admit_to_first": 107.2}
+[uqt.stats] {"iters": 40, "admit": 0.43, "gen": 6.55, "dec": 5.04, "send": 0.03, "dec_calls": 0.8, "admitted": 1, "active": 12.2, "latewait": 39.11, "ooo": 0, "step2_ms": 115.1, "occupied": 12.2, "queued": 0.0, "collect": 6.13}
+[uqt.hops p90 ms] {"recv_to_admit": null, "admit_to_first": null}
+[uqt.stats] {"iters": 55, "admit": 0.01, "gen": 5.36, "dec": 1.76, "send": 0.01, "dec_calls": 0.4, "admitted": 0, "active": 2.1, "latewait": 29.51, "ooo": 0, "step2_ms": 29.5, "occupied": 2.1, "queued": 0.0, "collect": 5.14}
+h2h-load {"n": 768, "n_ok": 768, "ttfa_ms_p50": 350.9199499967508, "ttfa_ms_p90": 1243.8834204804155, "ttfa_ms_p99": 1951.8412510474445, "ttfa_voiced_ms_p50": 350.94152300735004, "ttfa_voiced_ms_p90": 1293.759131419945, "rtf_p50": 1.065468258058983, "rtf_p90": 1.1338701567326588, "total_rtf_p50": 1.161350346897175, "underrun_frac": 0.953125, "heard_ms_p50": 441.40066250460217, "heard_ms_p90": 1374.1988353254349, "late_ms_p50": 1645.0656855013222, "late_ms_p90": 2146.0568860638887, "late_ms_p99": 2423.072538316483, "late_ms_max": 2607.094597944524, "first_late_at_s_p50": 0.16, "first_late_at_s_p90": 1.4239999999999964, "first_chunk_ms_p50": 160.0, "late_gt20ms_frac": 0.9388020833333334, "late_gt50ms_frac": 0.9088541666666666, "late_gt100ms_frac": 0.8619791666666666, "late_gt200ms_frac": 0.7669270833333334, "late_gt500ms_frac": 0.6236979166666666, "hdr_ms_p50": 1.9459609757177532, "hdr_ms_p90": 4.3717714084778, "C": 256, "procs": 8, "wall_s": 33.189706802368164, "audio_s": 5397.41, "throughput_audio_s_per_s": 162.62300936068775, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 30.2}
+[uqt.stats] {"iters": 2, "admit": 0.41, "gen": 18.56, "dec": 1.38, "send": 0.01, "dec_calls": 0.5, "admitted": 1, "active": 0.5, "latewait": 11.05, "ooo": 0, "step2_ms": 29.4, "occupied": 0.5, "queued": 1.0, "collect": 3.43}
+[uqt.hops p90 ms] {"recv_to_admit": 49.8, "admit_to_first": 120.1}
+[uqt.stats] {"iters": 73, "admit": 3.95, "gen": 6.2, "dec": 2.85, "send": 0.03, "dec_calls": 1.1, "admitted": 39, "active": 29.8, "latewait": 14.39, "ooo": 0, "step2_ms": 54.4, "occupied": 30.0, "queued": 0.3, "collect": 4.35}
+[uqt.hops p90 ms] {"recv_to_admit": 18.5, "admit_to_first": 98.3}
+[uqt.stats] {"iters": 72, "admit": 6.22, "gen": 2.17, "dec": 5.5, "send": 0.04, "dec_calls": 2.2, "admitted": 31, "active": 31.2, "latewait": 14.07, "ooo": 0, "step2_ms": 49.0, "occupied": 31.6, "queued": 0.0, "collect": 2.02}
+[uqt.hops p90 ms] {"recv_to_admit": 16.4, "admit_to_first": 94.2}
+[uqt.stats] {"iters": 80, "admit": 4.14, "gen": 3.88, "dec": 3.58, "send": 0.03, "dec_calls": 1.8, "admitted": 17, "active": 29.5, "latewait": 13.52, "ooo": 0, "step2_ms": 54.4, "occupied": 29.8, "queued": 0.0, "collect": 3.72}
+[uqt.hops p90 ms] {"recv_to_admit": 14.7, "admit_to_first": 73.1}
+[uqt.stats] {"iters": 92, "admit": 1.76, "gen": 5.66, "dec": 3.33, "send": 0.03, "dec_calls": 1.2, "admitted": 8, "active": 18.6, "latewait": 11.0, "ooo": 0, "step2_ms": 37.6, "occupied": 18.8, "queued": 0.0, "collect": 5.5}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 99.14212900912389, "ttfa_ms_p90": 132.13409000309184, "ttfa_ms_p99": 194.45316958881443, "ttfa_voiced_ms_p50": 99.14212900912389, "ttfa_voiced_ms_p90": 135.1289284939412, "rtf_p50": 0.3128651397066302, "rtf_p90": 0.3446389111107957, "total_rtf_p50": 0.3268828324392286, "underrun_frac": 0.041666666666666664, "heard_ms_p50": 144.28894502227195, "heard_ms_p90": 228.91593003063463, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 20.5475669703446, "late_ms_max": 31.300881993956864, "first_late_at_s_p50": 0.08499999999999999, "first_late_at_s_p90": 0.09, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.010416666666666666, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.36201101122424, "hdr_ms_p90": 1.8816789670381695, "C": 32, "procs": 1, "wall_s": 9.431537628173828, "audio_s": 707.91, "throughput_audio_s_per_s": 75.05775069860675, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 0.9, "admit_to_first": 31.1}
+[uqt.stats] {"iters": 52, "admit": 0.02, "gen": 7.28, "dec": 2.32, "send": 0.02, "dec_calls": 0.5, "admitted": 1, "active": 4.3, "latewait": 16.96, "ooo": 0, "step2_ms": 28.6, "occupied": 4.3, "queued": 0.0, "collect": 6.53}
+[uqt.hops p90 ms] {"recv_to_admit": 51.2, "admit_to_first": 120.5}
+[uqt.stats] {"iters": 71, "admit": 4.87, "gen": 6.04, "dec": 3.09, "send": 0.03, "dec_calls": 1.2, "admitted": 41, "active": 29.8, "latewait": 14.31, "ooo": 0, "step2_ms": 66.0, "occupied": 29.9, "queued": 0.3, "collect": 4.0}
+[uqt.hops p90 ms] {"recv_to_admit": 19.0, "admit_to_first": 96.5}
+[uqt.stats] {"iters": 73, "admit": 6.04, "gen": 1.96, "dec": 6.36, "send": 0.03, "dec_calls": 2.3, "admitted": 27, "active": 31.3, "latewait": 12.99, "ooo": 0, "step2_ms": 44.2, "occupied": 31.6, "queued": 0.0, "collect": 1.82}
+[uqt.hops p90 ms] {"recv_to_admit": 17.2, "admit_to_first": 85.8}
+[uqt.stats] {"iters": 79, "admit": 4.26, "gen": 3.52, "dec": 4.28, "send": 0.04, "dec_calls": 1.9, "admitted": 20, "active": 30.1, "latewait": 13.24, "ooo": 0, "step2_ms": 40.8, "occupied": 30.4, "queued": 0.0, "collect": 3.3}
+[uqt.hops p90 ms] {"recv_to_admit": 20.6, "admit_to_first": 70.0}
+[uqt.stats] {"iters": 96, "admit": 1.63, "gen": 6.1, "dec": 3.59, "send": 0.03, "dec_calls": 1.0, "admitted": 7, "active": 16.2, "latewait": 9.62, "ooo": 0, "step2_ms": 37.9, "occupied": 16.3, "queued": 0.0, "collect": 5.81}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 98.33775000879541, "ttfa_ms_p90": 131.79111099452712, "ttfa_ms_p99": 197.79645135276945, "ttfa_voiced_ms_p50": 98.43396698124707, "ttfa_voiced_ms_p90": 131.79111099452712, "rtf_p50": 0.31275261380514585, "rtf_p90": 0.3396176855234968, "total_rtf_p50": 0.3296886951686908, "underrun_frac": 0.041666666666666664, "heard_ms_p50": 134.22772202990018, "heard_ms_p90": 222.63321800390258, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 20.464791639824334, "late_ms_max": 41.89023096114397, "first_late_at_s_p50": 0.08, "first_late_at_s_p90": 0.087, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.010416666666666666, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.3594350311905146, "hdr_ms_p90": 1.839326461777091, "C": 32, "procs": 1, "wall_s": 9.853576421737671, "audio_s": 697.6, "throughput_audio_s_per_s": 70.7966295832492, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.5, "admit_to_first": 73.0}
+[uqt.stats] {"iters": 56, "admit": 0.32, "gen": 7.94, "dec": 2.18, "send": 0.01, "dec_calls": 0.4, "admitted": 4, "active": 3.2, "latewait": 22.67, "ooo": 0, "step2_ms": 30.8, "occupied": 3.2, "queued": 0.7, "collect": 6.75}
+[uqt.hops p90 ms] {"recv_to_admit": 1271.4, "admit_to_first": 301.0}
+[uqt.stats] {"iters": 15, "admit": 44.92, "gen": 4.24, "dec": 37.7, "send": 0.28, "dec_calls": 1.9, "admitted": 240, "active": 132.0, "latewait": 51.24, "ooo": 0, "step2_ms": 170.6, "occupied": 132.0, "queued": 97.2, "collect": 0.09}
+[uqt.hops p90 ms] {"recv_to_admit": 1754.9, "admit_to_first": 284.4}
+[uqt.stats] {"iters": 13, "admit": 6.57, "gen": 1.74, "dec": 70.84, "send": 0.71, "dec_calls": 2.0, "admitted": 15, "active": 255.5, "latewait": 75.0, "ooo": 0, "step2_ms": 155.2, "occupied": 255.8, "queued": 0.0, "collect": 0.94}
+[uqt.hops p90 ms] {"recv_to_admit": 74.5, "admit_to_first": 259.4}
+[uqt.stats] {"iters": 13, "admit": 13.74, "gen": 0.95, "dec": 71.59, "send": 0.7, "dec_calls": 2.0, "admitted": 32, "active": 251.9, "latewait": 79.35, "ooo": 0, "step2_ms": 169.3, "occupied": 252.9, "queued": 0.0, "collect": 0.41}
+[uqt.hops p90 ms] {"recv_to_admit": 80.1, "admit_to_first": 273.1}
+[uqt.stats] {"iters": 12, "admit": 25.27, "gen": 0.67, "dec": 66.5, "send": 0.72, "dec_calls": 1.2, "admitted": 101, "active": 243.2, "latewait": 83.4, "ooo": 0, "step2_ms": 176.7, "occupied": 247.8, "queued": 0.0, "collect": 0.19}
+[uqt.hops p90 ms] {"recv_to_admit": 95.8, "admit_to_first": 258.0}
+[uqt.stats] {"iters": 12, "admit": 22.05, "gen": 0.63, "dec": 53.91, "send": 0.59, "dec_calls": 2.8, "admitted": 76, "active": 244.7, "latewait": 91.28, "ooo": 0, "step2_ms": 169.1, "occupied": 249.3, "queued": 0.0, "collect": 0.18}
+[uqt.hops p90 ms] {"recv_to_admit": 108.8, "admit_to_first": 256.8}
+[uqt.stats] {"iters": 12, "admit": 23.59, "gen": 0.61, "dec": 46.25, "send": 0.7, "dec_calls": 3.4, "admitted": 56, "active": 247.4, "latewait": 105.38, "ooo": 0, "step2_ms": 183.8, "occupied": 251.8, "queued": 0.0, "collect": 0.18}
+[uqt.hops p90 ms] {"recv_to_admit": 113.2, "admit_to_first": 279.1}
+[uqt.stats] {"iters": 12, "admit": 27.74, "gen": 0.61, "dec": 42.49, "send": 0.73, "dec_calls": 3.5, "admitted": 68, "active": 243.9, "latewait": 98.33, "ooo": 0, "step2_ms": 164.2, "occupied": 249.8, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 205.5, "admit_to_first": 323.0}
+[uqt.stats] {"iters": 12, "admit": 25.64, "gen": 13.1, "dec": 61.97, "send": 1.03, "dec_calls": 3.2, "admitted": 52, "active": 244.8, "latewait": 76.55, "ooo": 0, "step2_ms": 196.3, "occupied": 249.1, "queued": 0.8, "collect": 12.68}
+[uqt.hops p90 ms] {"recv_to_admit": 122.0, "admit_to_first": 295.9}
+[uqt.stats] {"iters": 13, "admit": 31.25, "gen": 0.62, "dec": 43.72, "send": 0.66, "dec_calls": 2.8, "admitted": 55, "active": 230.3, "latewait": 92.18, "ooo": 0, "step2_ms": 157.3, "occupied": 236.1, "queued": 0.0, "collect": 0.17}
+[uqt.hops p90 ms] {"recv_to_admit": 114.7, "admit_to_first": 348.1}
+[uqt.stats] {"iters": 12, "admit": 42.75, "gen": 0.66, "dec": 34.92, "send": 0.97, "dec_calls": 3.2, "admitted": 33, "active": 205.3, "latewait": 89.8, "ooo": 0, "step2_ms": 176.5, "occupied": 210.7, "queued": 0.0, "collect": 0.16}
+[uqt.hops p90 ms] {"recv_to_admit": 108.6, "admit_to_first": 292.6}
+[uqt.stats] {"iters": 14, "admit": 21.63, "gen": 1.86, "dec": 27.84, "send": 0.4, "dec_calls": 2.4, "admitted": 18, "active": 156.7, "latewait": 98.0, "ooo": 0, "step2_ms": 140.7, "occupied": 161.0, "queued": 0.0, "collect": 1.2}
+[uqt.hops p90 ms] {"recv_to_admit": 94.7, "admit_to_first": 253.2}
+[uqt.stats] {"iters": 14, "admit": 13.78, "gen": 2.96, "dec": 31.23, "send": 0.44, "dec_calls": 2.5, "admitted": 11, "active": 109.9, "latewait": 95.0, "ooo": 0, "step2_ms": 139.5, "occupied": 112.4, "queued": 0.0, "collect": 2.16}
+[uqt.hops p90 ms] {"recv_to_admit": 100.7, "admit_to_first": 173.4}
+[uqt.stats] {"iters": 20, "admit": 6.19, "gen": 3.18, "dec": 16.9, "send": 0.13, "dec_calls": 3.4, "admitted": 6, "active": 65.8, "latewait": 75.82, "ooo": 0, "step2_ms": 110.6, "occupied": 68.2, "queued": 0.0, "collect": 2.87}
+[uqt.hops p90 ms] {"recv_to_admit": 25.5, "admit_to_first": 82.2}
+[uqt.stats] {"iters": 36, "admit": 0.58, "gen": 7.34, "dec": 6.51, "send": 0.06, "dec_calls": 2.1, "admitted": 1, "active": 30.0, "latewait": 41.21, "ooo": 0, "step2_ms": 110.6, "occupied": 31.0, "queued": 0.0, "collect": 6.89}
+[uqt.hops p90 ms] {"recv_to_admit": null, "admit_to_first": null}
+[uqt.stats] {"iters": 33, "admit": 0.02, "gen": 6.22, "dec": 5.13, "send": 0.04, "dec_calls": 0.7, "admitted": 0, "active": 10.1, "latewait": 51.89, "ooo": 0, "step2_ms": 106.6, "occupied": 10.1, "queued": 0.0, "collect": 5.76}
+[uqt.hops p90 ms] {"recv_to_admit": null, "admit_to_first": null}
+[uqt.stats] {"iters": 19, "admit": 0.02, "gen": 8.18, "dec": 3.75, "send": 0.03, "dec_calls": 0.5, "admitted": 0, "active": 3.4, "latewait": 94.17, "ooo": 0, "step2_ms": 107.1, "occupied": 3.4, "queued": 0.0, "collect": 7.63}
+[uqt.hops p90 ms] {"recv_to_admit": null, "admit_to_first": null}
+[uqt.stats] {"iters": 19, "admit": 0.01, "gen": 8.62, "dec": 1.15, "send": 0.01, "dec_calls": 0.2, "admitted": 0, "active": 1.0, "latewait": 99.73, "ooo": 0, "step2_ms": 110.8, "occupied": 1.0, "queued": 0.0, "collect": 8.18}
+h2h-load {"n": 768, "n_ok": 768, "ttfa_ms_p50": 352.1921600040514, "ttfa_ms_p90": 1267.963700013934, "ttfa_ms_p99": 1996.8842850619694, "ttfa_voiced_ms_p50": 352.3615245067049, "ttfa_voiced_ms_p90": 1322.5353216868907, "rtf_p50": 1.0618634853809423, "rtf_p90": 1.1108713480129653, "total_rtf_p50": 1.1398281430367572, "underrun_frac": 0.9388020833333334, "heard_ms_p50": 443.3234709710814, "heard_ms_p90": 1419.0523611118601, "late_ms_p50": 1297.8083850175608, "late_ms_p90": 1933.841948816553, "late_ms_p99": 2160.294458697317, "late_ms_max": 2271.8876260332763, "first_late_at_s_p50": 0.16, "first_late_at_s_p90": 1.28, "first_chunk_ms_p50": 160.0, "late_gt20ms_frac": 0.9231770833333334, "late_gt50ms_frac": 0.89453125, "late_gt100ms_frac": 0.84765625, "late_gt200ms_frac": 0.7213541666666666, "late_gt500ms_frac": 0.5625, "hdr_ms_p50": 2.1347445144783705, "hdr_ms_p90": 4.642289457842708, "C": 256, "procs": 8, "wall_s": 36.599599838256836, "audio_s": 5405.43, "throughput_audio_s_per_s": 147.69095902381457, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.6, "admit_to_first": 31.7}
+[uqt.stats] {"iters": 12, "admit": 0.11, "gen": 10.34, "dec": 0.93, "send": 0.01, "dec_calls": 0.2, "admitted": 1, "active": 0.9, "latewait": 94.86, "ooo": 0, "step2_ms": 112.7, "occupied": 0.9, "queued": 0.2, "collect": 7.33}
+[uqt.hops p90 ms] {"recv_to_admit": 49.4, "admit_to_first": 123.9}
+[uqt.stats] {"iters": 72, "admit": 4.15, "gen": 5.94, "dec": 3.6, "send": 0.03, "dec_calls": 1.2, "admitted": 41, "active": 29.8, "latewait": 14.29, "ooo": 0, "step2_ms": 54.2, "occupied": 30.0, "queued": 0.3, "collect": 4.07}
+[uqt.hops p90 ms] {"recv_to_admit": 16.8, "admit_to_first": 102.7}
+[uqt.stats] {"iters": 75, "admit": 5.84, "gen": 2.44, "dec": 4.77, "send": 0.04, "dec_calls": 2.0, "admitted": 25, "active": 31.3, "latewait": 13.68, "ooo": 0, "step2_ms": 55.1, "occupied": 31.6, "queued": 0.0, "collect": 2.29}
+[uqt.hops p90 ms] {"recv_to_admit": 25.8, "admit_to_first": 94.0}
+[uqt.stats] {"iters": 77, "admit": 4.87, "gen": 3.18, "dec": 5.33, "send": 0.03, "dec_calls": 2.1, "admitted": 23, "active": 29.9, "latewait": 12.59, "ooo": 0, "step2_ms": 44.3, "occupied": 30.3, "queued": 0.1, "collect": 3.02}
+[uqt.hops p90 ms] {"recv_to_admit": 16.1, "admit_to_first": 72.9}
+[uqt.stats] {"iters": 93, "admit": 1.16, "gen": 6.09, "dec": 2.62, "send": 0.02, "dec_calls": 1.0, "admitted": 6, "active": 17.7, "latewait": 11.76, "ooo": 0, "step2_ms": 37.1, "occupied": 17.8, "queued": 0.0, "collect": 5.93}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 102.01205548946746, "ttfa_ms_p90": 137.89639348397031, "ttfa_ms_p99": 203.19381597219032, "ttfa_voiced_ms_p50": 102.01205548946746, "ttfa_voiced_ms_p90": 137.89639348397031, "rtf_p50": 0.3092709279629884, "rtf_p90": 0.34164183018242056, "total_rtf_p50": 0.327641017476903, "underrun_frac": 0.0, "heard_ms_p50": 188.44810148933902, "heard_ms_p90": 233.5393864964135, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 0.0, "late_ms_max": 0.0, "first_late_at_s_p50": null, "first_late_at_s_p90": null, "first_chunk_ms_p50": 160.0, "late_gt20ms_frac": 0.0, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.3984584948047996, "hdr_ms_p90": 1.9310140050947666, "C": 32, "procs": 1, "wall_s": 9.379709243774414, "audio_s": 702.99, "throughput_audio_s_per_s": 74.94795219442382, "errors": []}
+[uqt.hops p90 ms] {"recv_to_admit": 1.0, "admit_to_first": 30.1}
+[uqt.stats] {"iters": 50, "admit": 0.02, "gen": 6.91, "dec": 1.66, "send": 0.01, "dec_calls": 0.4, "admitted": 1, "active": 2.5, "latewait": 17.84, "ooo": 0, "step2_ms": 19.7, "occupied": 2.5, "queued": 0.0, "collect": 6.18}
+[uqt.hops p90 ms] {"recv_to_admit": 51.2, "admit_to_first": 120.8}
+[uqt.stats] {"iters": 74, "admit": 4.66, "gen": 6.02, "dec": 2.75, "send": 0.03, "dec_calls": 1.2, "admitted": 39, "active": 29.9, "latewait": 13.84, "ooo": 0, "step2_ms": 64.6, "occupied": 30.0, "queued": 0.3, "collect": 4.22}
+[uqt.hops p90 ms] {"recv_to_admit": 19.0, "admit_to_first": 97.1}
+[uqt.stats] {"iters": 72, "admit": 6.36, "gen": 1.81, "dec": 5.62, "send": 0.03, "dec_calls": 2.3, "admitted": 30, "active": 31.1, "latewait": 14.06, "ooo": 0, "step2_ms": 47.1, "occupied": 31.5, "queued": 0.0, "collect": 1.65}
+[uqt.hops p90 ms] {"recv_to_admit": 22.0, "admit_to_first": 86.1}
+[uqt.stats] {"iters": 82, "admit": 3.61, "gen": 4.3, "dec": 3.08, "send": 0.03, "dec_calls": 1.9, "admitted": 19, "active": 29.8, "latewait": 13.65, "ooo": 0, "step2_ms": 44.3, "occupied": 30.1, "queued": 0.0, "collect": 4.14}
+[uqt.hops p90 ms] {"recv_to_admit": 17.0, "admit_to_first": 81.0}
+[uqt.stats] {"iters": 90, "admit": 1.48, "gen": 5.8, "dec": 2.92, "send": 0.03, "dec_calls": 1.2, "admitted": 7, "active": 18.2, "latewait": 12.06, "ooo": 0, "step2_ms": 37.6, "occupied": 18.4, "queued": 0.0, "collect": 5.64}
+h2h-load {"n": 96, "n_ok": 96, "ttfa_ms_p50": 98.20092801237479, "ttfa_ms_p90": 134.18669402017258, "ttfa_ms_p99": 195.48791302659077, "ttfa_voiced_ms_p50": 98.20092801237479, "ttfa_voiced_ms_p90": 134.18669402017258, "rtf_p50": 0.3110751055133091, "rtf_p90": 0.33780196499939036, "total_rtf_p50": 0.32607927276169, "underrun_frac": 0.0625, "heard_ms_p50": 150.2155225223396, "heard_ms_p90": 214.20241701067425, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 22.054950319579746, "late_ms_max": 41.21066100196913, "first_late_at_s_p50": 0.08, "first_late_at_s_p90": 0.08499999999999999, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.03125, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.3618259981740266, "hdr_ms_p90": 2.04244747874327, "C": 32, "procs": 1, "wall_s": 10.025824069976807, "audio_s": 705.34, "throughput_audio_s_per_s": 70.3523216722106, "errors": []}
+load 32 {"n": 96, "n_ok": 96, "ttfa_ms_p50": 98.20092801237479, "ttfa_ms_p90": 134.18669402017258, "ttfa_ms_p99": 195.48791302659077, "ttfa_voiced_ms_p50": 98.20092801237479, "ttfa_voiced_ms_p90": 134.18669402017258, "rtf_p50": 0.3110751055133091, "rtf_p90": 0.33780196499939036, "total_rtf_p50": 0.32607927276169, "underrun_frac": 0.0625, "heard_ms_p50": 150.2155225223396, "heard_ms_p90": 214.20241701067425, "late_ms_p50": 0.0, "late_ms_p90": 0.0, "late_ms_p99": 22.054950319579746, "late_ms_max": 41.21066100196913, "first_late_at_s_p50": 0.08, "first_late_at_s_p90": 0.08499999999999999, "first_chunk_ms_p50": 90.0, "late_gt20ms_frac": 0.03125, "late_gt50ms_frac": 0.0, "late_gt100ms_frac": 0.0, "late_gt200ms_frac": 0.0, "late_gt500ms_frac": 0.0, "hdr_ms_p50": 1.3618259981740266, "hdr_ms_p90": 2.04244747874327, "C": 32, "procs": 1, "wall_s": 10.025824069976807, "audio_s": 705.34, "throughput_audio_s_per_s": 70.3523216722106, "errors": []}
+load 256 {"n": 768, "n_ok": 768, "ttfa_ms_p50": 352.1921600040514, "ttfa_ms_p90": 1267.963700013934, "ttfa_ms_p99": 1996.8842850619694, "ttfa_voiced_ms_p50": 352.3615245067049, "ttfa_voiced_ms_p90": 1322.5353216868907, "rtf_p50": 1.0618634853809423, "rtf_p90": 1.1108713480129653, "total_rtf_p50": 1.1398281430367572, "underrun_frac": 0.9388020833333334, "heard_ms_p50": 443.3234709710814, "heard_ms_p90": 1419.0523611118601, "late_ms_p50": 1297.8083850175608, "late_ms_p90": 1933.841948816553, "late_ms_p99": 2160.294458697317, "late_ms_max": 2271.8876260332763, "first_late_at_s_p50": 0.16, "first_late_at_s_p90": 1.28, "first_chunk_ms_p50": 160.0, "late_gt20ms_frac": 0.9231770833333334, "late_gt50ms_frac": 0.89453125, "late_gt100ms_frac": 0.84765625, "late_gt200ms_frac": 0.7213541666666666, "late_gt500ms_frac": 0.5625, "hdr_ms_p50": 2.1347445144783705, "hdr_ms_p90": 4.642289457842708, "C": 256, "procs": 8, "wall_s": 36.599599838256836, "audio_s": 5405.43, "throughput_audio_s_per_s": 147.69095902381457, "errors": []}

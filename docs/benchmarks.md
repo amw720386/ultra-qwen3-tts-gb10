@@ -139,6 +139,12 @@ first 64-client run, and again when reproduced. With a workspace per graph pool,
 300 clips without a hang. The micro-test hung in three of three runs without the fix and in none with it. No micro-test output was wrong in either
 case. The default settings before the fix never hung in 40 runs.
 
+Speed with and without the fix (`bench/gb10/fixspeed_stats.py`, `results/gb10/fixspeed`, four server starts each, no failed requests):
+mean throughput -2.2% at 32 clients (18 passes each, permutation p = 0.10), -1.0% at 64 (4 each, p = 0.60), +0.7% at 128 (4 each,
+p = 0.86), -0.4% at 256 (10 each, p = 0.90); median first byte -1.4% to -0.4% at 32-256. No cost was measured. That
+box is slower than the one behind the head-to-head tables (voice heard about 345 ms at 128 clients against 316 ms, with and without the
+fix), so it was used only to compare the two versions and the head-to-head numbers are unchanged.
+
 ## Competitor setups
 
 Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
