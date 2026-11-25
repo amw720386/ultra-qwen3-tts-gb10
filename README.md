@@ -204,9 +204,24 @@ runs at each of 64 and 256 clients = 2,400 clips per setting; `results/gb10/swer
 the changes below 2.23% (9 clips over 50% errors, 1.85% without them), current settings 2.12% (3 clips,
 1.93%). Current minus earlier is -0.11 points (95% bootstrap CI over texts -0.52 to +0.27), so no loss
 was measured. Clips over 25 s, at 256 clients over 3,000 clips each: 1 earlier, 2 now.
-On H100, with the same 300 texts, sglang-omni
-scored 1.77% and 1.86% and vLLM-Omni 2.03% and 6.97% (three clips over 50% errors in the second):
-accuracy is level across all three systems.
+
+All three systems through their own servers on one GB10 (a second unit of the same model; `bench/gb10/werq.sh`,
+`bench/gb10/wer3_stats.py`, `results/gb10/wer3`): the same 300 texts, 4 runs at 32 and 4 at 64 clients, 2,400 clips
+per system, every clip different audio, Whisper large-v3, uqt with final default settings.
+
+| System | WER | Excluding garbled clips (>50% errors) | Garbled | Failed requests |
+|---|---|---|---|---|
+| uqt | 2.46% | 1.91% | 9 | 0 |
+| sglang-omni 0.2 | 1.96% | 1.87% | 3 | 0 |
+| vLLM-Omni 0.32 | 2.93% | 1.97% | 3 | 1 (ran to its 640-token limit without ending) |
+
+- Differences (95% bootstrap CI over texts): uqt minus sglang-omni +0.50 (+0.07 to +1.04), excluding garbled clips
+  +0.04 (-0.12 to +0.20); uqt minus vLLM-Omni -0.47 (-2.53 to +0.79), excluding garbled -0.06 (-0.24 to +0.12).
+- **Not level with sglang-omni on overall WER:** on ordinary clips all three agree, but uqt made more garbled clips in
+  this test (9 against 3, Fisher exact p = 0.15, so the counts alone do not prove a higher rate). Three of uqt's nine
+  are one text with unusual spelling, scored in different runs; four are runaways of 25-32 s.
+- sglang-omni also caps a clip's length from its text. Cutting uqt's audio at that cap, offline, lowers uqt to 2.32%
+  (+0.35 against sglang-omni, CI +0.02 to +0.74), so the cap explains only part of the difference.
 
 Serving loop (`uqt/engine_proc.py`), changed after the earlier tables:
 - Host-to-GPU copies in the step launch and decode are non-blocking (`UQT_ASYNC_H2D`). A blocking copy
