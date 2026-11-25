@@ -8,7 +8,6 @@ project:
 hero:
   title: ultra-qwen3-tts-gb10
   subtitle: Qwen3-TTS 1.7B · one GB10 · 1 to 256 streams
-  chips: [FP8 + FP4 weights, INT8 KV cache, fused codec, streaming HTTP]
 theme: {accent: "#3b82f6", accent2: "#8a98ad", accent3: "#56627a", bg: "#05080f", panel: "#0a111c", line: "#1c2636"}
 badges:
   - {label: license, message: Apache-2.0, color: blue, link: LICENSE}
@@ -52,58 +51,13 @@ intro: |
   PyTorch, with a Go gateway that streams raw PCM over HTTP. Decode on this chip is limited by its 273 GB/s of unified memory, so most of
   the work goes into reading fewer bytes per step.
 
-video:
-  mp4: assets/launch.mp4
-  gif: assets/launch-preview.gif
-  poster: assets/launch-poster.png
-  srt: assets/launch.srt
-  caption: "Launch video: how it works, throughput, playback gaps. Click for the mp4."
-  fps: 30
-  music: false
-  poster_at: 36.5
-  scenes:
-    - type: title
-      title: Qwen3-TTS on one GB10
-      subtitle: "{{ n.vs_sglang }} the throughput of sglang-omni, geometric mean over 1 to 256 clients"
-      chips: [same model, same box, same client]
-      say: "Streaming Qwen3-TTS on one NVIDIA GB10."
-    - type: how
-      kicker: How · GB10 · 273 GB/s unified memory
-      heading: Read fewer bytes every step.
-      boxes:
-        - {label: weights, body: "FP8 halves what a step reads. With one or two streams, FP4.", glyph: {cols: 16, rows: 1, color: accent, lit: [0, 1, 2, 3, 4, 5, 6, 7]}}
-        - {label: attention, body: "Each stream reads only its own live KV, stored as INT8.", glyph: {cols: 10, rows: 3, color: accent, lit: [0, 1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 20, 21, 22, 23, 24, 25, 26, 27, 28]}}
-        - {label: codec, body: "Residual units, upsampling and output each run as one fused kernel.", glyph: {cols: 3, rows: 1, color: accent, lit: [0, 1, 2]}}
-      min_dur: 7
-      gif: assets/how.gif
-      gif_start: 0
-      say: "Decode is limited by memory bandwidth, so the engine moves fewer bytes per step."
-    - type: chart
-      chart: single
-      min_dur: 5.5
-      say: "One stream: {{ n.ms_bf16 }} per audio frame in BF16, {{ n.ms_hyb }} with FP8 and FP4 weights."
-    - type: chart
-      chart: throughput
-      min_dur: 9
-      gif: assets/throughput.gif
-      say: "Throughput from 1 to 256 clients, against sglang-omni and vLLM-Omni on the same box."
-    - type: chart
-      chart: late
-      min_dur: 8
-      gif: assets/late.gif
-      say: "At 128 clients, {{ n.late128 }} of requests have any audio chunk arrive late."
-    - type: end
-      style: launch
-      kicker: Qwen3-TTS 1.7B · one GB10 · 8 clients
-      title: "2× sglang-omni's throughput."
-      bars:
-        - {label: This engine, number: t8, unit: audio-s/s, highlight: true}
-        - {label: sglang-omni, number: t8_sglang, unit: audio-s/s}
-        - {label: vLLM-Omni, number: t8_vllm, unit: audio-s/s}
-      subtitle: "Streaming HTTP, 8 back-to-back clients, medians of three runs, the load closest to the geometric mean of {{ n.vs_sglang }} over 1 to 256 clients."
-      credit: Made at Magni
-      min_dur: 6
-      say: ""
+  [![Launch film: one grey figure speaks, the head opens to show the model running, 128 figures speak at once, and three crowds race to the first word](assets/launch-poster.jpg)](assets/launch.mp4)
+
+  *Launch film (27 s). Click to play. The layer, step and stream counts, the start times and the throughput are the real ones. The speech, and which tiles light, are illustrative. Made with [`media/film.py`](media/film.py).*
+
+  <p align="center"><img src="assets/race.gif" width="900" alt="Three crowds of 128 press play together. Ours is heard after 0.32 s, sglang-omni after 4.77 s, and vLLM-Omni is still silent"></p>
+
+  *128 clients on one GB10, shown in real time. Each crowd lights up at its median time until the voice is heard. vLLM-Omni's is 13.4 s, after the clip ends.*
 
 tables:
   - id: latency
@@ -195,7 +149,7 @@ sections:
     emoji: "🧩"
     id: how-it-works
     images:
-      - {src: assets/how.gif, alt: "Three places the engine reads fewer bytes per step: FP8 and FP4 weights, live INT8 KV, a fused codec decoder", width: "900"}
+      - {src: assets/inside.gif, alt: "Inside the head: a token passes 28 Talker layers, 15 predictor steps and the codec, and leaves the mouth as one 80 ms frame", width: "900"}
     diagrams: [request-path]
     body: |
       FP8 weights halve what each step streams from memory, batched attention reads only each stream's own live KV, and the codec decoder's stages are
@@ -232,6 +186,7 @@ caveats:
   - "The first start compiles and captures every kernel and graph and takes many minutes with hybrid weights."
   - "sglang-omni needs a one-line patch to start on GB10, because one of its Triton kernels exceeds the chip's shared memory."
 repo_map:
+  - {path: media/film.py, desc: "the launch film"}
   - {path: uqt/, desc: "engines, kernels, FP8 weights, streaming codec, engine process"}
   - {path: gateway/, desc: "Go streaming gateway"}
   - {path: bench/gb10/, desc: "GB10 benchmarks, accuracy checks, profilers"}

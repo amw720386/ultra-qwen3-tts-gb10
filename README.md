@@ -14,14 +14,18 @@
 
 ---
 
-**Launch video: how it works, throughput, playback gaps. Click for the mp4.**
-
-[![Explainer video preview (click for the mp4)](assets/launch-preview.gif)](assets/launch.mp4)
-
 ultra-qwen3-tts-gb10 is a streaming inference engine for
 [Qwen3-TTS-12Hz-1.7B](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) on the NVIDIA GB10. It is Python and Triton on
 PyTorch, with a Go gateway that streams raw PCM over HTTP. Decode on this chip is limited by its 273 GB/s of unified memory, so most of
 the work goes into reading fewer bytes per step.
+
+[![Launch film: one grey figure speaks, the head opens to show the model running, 128 figures speak at once, and three crowds race to the first word](assets/launch-poster.jpg)](assets/launch.mp4)
+
+*Launch film (27 s). Click to play. The layer, step and stream counts, the start times and the throughput are the real ones. The speech, and which tiles light, are illustrative. Made with [`media/film.py`](media/film.py).*
+
+<p align="center"><img src="assets/race.gif" width="900" alt="Three crowds of 128 press play together. Ours is heard after 0.32 s, sglang-omni after 4.77 s, and vLLM-Omni is still silent"></p>
+
+*128 clients on one GB10, shown in real time. Each crowd lights up at its median time until the voice is heard. vLLM-Omni's is 13.4 s, after the clip ends.*
 
 <a id="results"></a>
 
@@ -74,7 +78,7 @@ fused into single kernels. Details: [docs/techniques.md](docs/techniques.md).
 
 <p align="center"><img src="assets/request-path.svg" alt="From request to audio" width="100%"></p>
 
-<p align="center"><img src="assets/how.gif" alt="Three places the engine reads fewer bytes per step: FP8 and FP4 weights, live INT8 KV, a fused codec decoder" width="900"></p>
+<p align="center"><img src="assets/inside.gif" alt="Inside the head: a token passes 28 Talker layers, 15 predictor steps and the codec, and leaves the mouth as one 80 ms frame" width="900"></p>
 
 <a id="accuracy"></a>
 
@@ -123,6 +127,7 @@ curl -s http://127.0.0.1:8091/v1/audio/speech -H "Content-Type: application/json
 
 | Path | What it is |
 |---|---|
+| `media/film.py` | the launch film |
 | `uqt/` | engines, kernels, FP8 weights, streaming codec, engine process |
 | `gateway/` | Go streaming gateway |
 | `bench/gb10/` | GB10 benchmarks, accuracy checks, profilers |
