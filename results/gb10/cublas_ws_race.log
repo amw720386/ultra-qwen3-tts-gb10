@@ -1,0 +1,72 @@
+## all shapes run 1
+RESULT hang in stage 'concurrent' after 11 good pairs; wrong outputs before it: 0 {}
+20 pairs: one stream 1.15 s, two streams 0.47 s
+torch 2.9.0a0+145a3a7bda.nv25.10 clear True | serial mismatches 0 | concurrent 250 pairs x 100 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## all shapes run 2
+RESULT hang in stage 'concurrent' after 22 good pairs; wrong outputs before it: 0 {}
+20 pairs: one stream 1.05 s, two streams 0.48 s
+torch 2.9.0a0+145a3a7bda.nv25.10 clear True | serial mismatches 0 | concurrent 250 pairs x 100 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## all shapes run 3
+RESULT hang in stage 'concurrent' after 32 good pairs; wrong outputs before it: 0 {}
+20 pairs: one stream 1.13 s, two streams 1.02 s
+torch 2.9.0a0+145a3a7bda.nv25.10 clear True | serial mismatches 0 | concurrent 250 pairs x 100 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 16,2048,12288
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 16,6144,2048
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 16,2048,4096
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 16,1024,6144
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 16,3072,1024
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 64,2048,12288
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 64,6144,2048
+RESULT hang in stage 'concurrent' after 0 good pairs; wrong outputs before it: 0 {}
+## 64,2048,4096
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 64,1024,6144
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 64,3072,1024
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 128,2048,12288
+## 128,6144,2048
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 128,2048,4096
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 128,1024,6144
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 128,3072,1024
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 256,2048,12288
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 256,6144,2048
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 256,2048,4096
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 256,1024,6144
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
+## 256,3072,1024
+torch 2.9.0a0+145a3a7bda.nv25.10 clear False | serial mismatches 0 | concurrent 600 pairs x 60 GEMMs: 0 wrong outputs, worst error / mean |out| 0.0
+by (rows, K, N): {}
