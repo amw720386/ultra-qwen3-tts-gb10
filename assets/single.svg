@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 278" width="980" height="278" role="img" aria-label="Generation time per audio frame, one stream">
+<rect width="980" height="278" rx="16" fill="#05080f"/>
+<text x="32" y="44" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-weight="700" font-size="22" fill="#e6edf6">Generation time per audio frame, one stream</text>
+<text x="32" y="68" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14" fill="#8a98ad">milliseconds · one frame is 80 ms of audio</text>
+<text x="171" y="118" text-anchor="end" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="15" fill="#8a98ad" font-weight="400">BF16 weights</text>
+<rect x="185" y="96" width="645.0" height="30" rx="6" fill="#1c2636"/>
+<text x="840.0" y="117" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="15" font-weight="700" fill="#e6edf6">28.3 ms</text>
+<text x="171" y="164" text-anchor="end" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="15" fill="#8a98ad" font-weight="400">FP8 weights</text>
+<rect x="185" y="142" width="309.8" height="30" rx="6" fill="#1c2636"/>
+<text x="504.8" y="163" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="15" font-weight="700" fill="#e6edf6">13.6 ms</text>
+<text x="171" y="210" text-anchor="end" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="15" fill="#e6edf6" font-weight="700">FP8 + FP4 weights</text>
+<rect x="185" y="188" width="210.9" height="30" rx="6" fill="#3b82f6"/>
+<text x="405.9" y="209" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="15" font-weight="700" fill="#e6edf6">9.25 ms</text>
+<text x="948" y="264" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#8a98ad">source: results/gb10/release.json · lower is better</text>
+</svg>

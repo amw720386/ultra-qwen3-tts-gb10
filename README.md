@@ -1,272 +1,140 @@
-# ultra-qwen3-tts-gb10
+<div align="center">
 
-Fast streaming inference for Qwen3-TTS-12Hz-1.7B on the NVIDIA GB10, with accuracy at parity with
-the reference implementation. It targets both single-stream latency (time to first audio,
-real-time factor) and batched throughput (many concurrent real-time streams on one box).
+<img src="assets/hero.svg" alt="ultra-qwen3-tts-gb10" width="100%">
 
-## Hardware notes
+# 🔊 ultra-qwen3-tts-gb10
 
-- GB10: Blackwell GPU, compute capability **sm_121**, with **unified LPDDR5x memory (~273 GB/s)**
-  shared with the CPU.
-- Decode is bandwidth-bound on this part: every Talker step streams the weights from LPDDR5x. Most
-  of the speedup comes from moving fewer bytes per step (FP8 weights, attention that reads only live
-  KV) and from fusing codec stages so intermediates never round-trip through memory.
+**Streaming Qwen3-TTS on one NVIDIA GB10, at 2.1× the throughput of sglang-omni.**
 
-## Running on a GB10 box
+[![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![model: Qwen3-TTS-12Hz-1.7B](https://img.shields.io/badge/model-Qwen3--TTS--12Hz--1.7B-6f42c1) ![GPU: NVIDIA GB10](https://img.shields.io/badge/GPU-NVIDIA%20GB10-76b900)
 
-Everything runs directly on the box. Setup quirks:
+[📈 Results](#results) · [🎧 Does it keep up with playback?](#playback) · [🧩 How it works](#how-it-works) · [🎯 Accuracy](#accuracy) · [🚀 Quick start](#quick-start) · [⚠️ Honest caveats](#caveats) · [🗺️ Repo map](#repo-map)
+
+</div>
+
+---
+
+ultra-qwen3-tts-gb10 is a streaming inference engine for
+[Qwen3-TTS-12Hz-1.7B](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) on the NVIDIA GB10. It is Python and Triton on
+PyTorch, with a Go gateway that streams raw PCM over HTTP. Decode on this chip is limited by its 273 GB/s of unified memory, so most of
+the work goes into reading fewer bytes per step.
+
+[![Launch film: one grey figure speaks, the head opens to show the model running, 128 figures speak at once, and three crowds race to the first word](assets/launch-poster.jpg)](assets/launch.mp4)
+
+*Launch film (27 s). Click to play. The layer, step and stream counts, the start times and the throughput are the real ones. The speech, and which tiles light, are illustrative. Made with [`media/film.py`](media/film.py).*
+
+<p align="center"><img src="assets/race.gif" width="900" alt="Three crowds of 128 press play together. Ours is heard after 0.32 s, sglang-omni after 4.77 s, and vLLM-Omni is still silent"></p>
+
+*128 clients on one GB10, shown in real time. Each crowd lights up at its median time until the voice is heard. vLLM-Omni's is 13.4 s, after the clip ends.*
+
+<a id="results"></a>
+
+## 📈 Results
+
+One GB10, Qwen3-TTS-12Hz-1.7B CustomVoice, streaming HTTP. Every server ran alone on the same box with the same multi-process client,
+each client sending requests back to back: three runs at 8 to 64 clients, two at 128 and 256, and one run of three requests at 1 client.
+vLLM-Omni 0.32 and sglang-omni 0.2 ran at their default limits ([setups](docs/benchmarks.md#competitor-setups)).
+
+**First byte and voice heard, median in ms (lower is better)**
+
+| Clients | First byte, this engine | sglang-omni | vLLM-Omni | Voice heard, this engine | sglang-omni | vLLM-Omni |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 32 | 79 | 56 | 42 | 89 | 873 |
+| 8 | 78 | 104 | 109 | 88 | 114 | 1,029 |
+| 16 | 79 | 115 | - | 91 | 125 | - |
+| 32 | 88 | 94 | 166 | 104 | 205 | 1,875 |
+| 64 | 92 | 101 | 267 | 164 | 260 | 3,146 |
+| 128 | 230 | 4,634 | 10,407 | 316 | 4,770 | 13,421 |
+| 256 | 324 | 4,921 | 31,275 | 415 | 5,114 | 34,292 |
+
+<sub>Source: `results/gb10/release.json`</sub>
+
+<p align="center"><img src="assets/throughput.svg" alt="Throughput by number of clients" width="100%"></p>
+
+"Voice heard" is when a listener hears speech: the first byte, plus any stall, plus the silence a clip opens with.
+
+- ✅ **Throughput:** 1.8× to 3.3× sglang-omni, and 3.1× vLLM-Omni as a geometric mean over the loads measured.
+- ✅ **Every request completed.** sglang-omni rejected 67 of 768 at 128 clients and 856 of 1,536 at 256, at its default queue limit.
+- ❌ **Behind:** real-time factor at 256 clients, 0.98 against 0.84 on the requests sglang-omni kept.
+- 🧪 **Not measured:** vLLM-Omni at 16 clients, and more than one GB10.
+
+<a id="playback"></a>
+
+## 🎧 Does it keep up with playback?
+
+Up to 128 clients a small client buffer hides the gaps. At 256 the engine generates at real time with no headroom, so 62% of
+requests have a late chunk, by 86 ms at p90.
+
+<p align="center"><img src="assets/late.svg" alt="Requests with a late audio chunk" width="100%"></p>
+
+<a id="how-it-works"></a>
+
+## 🧩 How it works
+
+FP8 weights halve what each step streams from memory, batched attention reads only each stream's own live KV, and the codec decoder's stages are
+fused into single kernels. Details: [docs/techniques.md](docs/techniques.md).
+
+<p align="center"><img src="assets/single.svg" alt="Generation time per audio frame, one stream" width="100%"></p>
+
+<p align="center"><img src="assets/request-path.svg" alt="From request to audio" width="100%"></p>
+
+<p align="center"><img src="assets/inside.gif" alt="Inside the head: a token passes 28 Talker layers, 15 predictor steps and the codec, and leaves the mouth as one 80 ms frame" width="900"></p>
+
+<a id="accuracy"></a>
+
+## 🎯 Accuracy
+
+Word error rate through each system's own server on one GB10, with final default settings: the same 300 LibriSpeech test-clean texts, four runs at
+each of 32 and 64 clients, 2,400 clips from this engine, scored with Whisper large-v3 ([intervals](docs/benchmarks.md#accuracy-through-the-server)).
+
+| System | WER | Excluding garbled clips | Garbled clips |
+|---|---:|---:|---:|
+| This engine | 2.46% | 1.91% | 9 |
+| sglang-omni 0.2 | 1.96% | 1.87% | 3 |
+| vLLM-Omni 0.32 | 2.93% | 1.97% | 3 |
+
+A garbled clip has more than half its words wrong.
+
+- 🟰 **Level** on ordinary clips, where all three agree within the interval.
+- ❌ **Behind** sglang-omni on overall WER, by 0.50 points (95% interval 0.07 to 1.04), because this engine made more garbled clips in this test.
+
+<a id="quick-start"></a>
+
+## 🚀 Quick start
+
+**On a GB10, in the NGC PyTorch 25.10 container ([setup](docs/running.md))**
 
 ```bash
-# container: NGC PyTorch 25.10 (nvcr.io/nvidia/pytorch:25.10-py3)
-pip uninstall -y torchao
-pip install --no-deps torchaudio==2.9.0     # --no-deps keeps the NGC torch build
-export UQT_NO_PDL=1                         # required with the container's Triton 3.4
+(cd gateway && go build -o uqt-gw .)
+UQT_NO_PDL=1 python -m uqt.engine_proc --sock /tmp/uqt.sock --max-slots 256 --max-len 512 --weights hyb &
+./gateway/uqt-gw -sock /tmp/uqt.sock -addr 127.0.0.1:8091 &
+curl -s http://127.0.0.1:8091/v1/audio/speech -H "Content-Type: application/json" \
+  -d '{"input": "Hello from one GB10.", "voice": "Ryan", "language": "English"}' > out.pcm
 ```
 
-Benchmarks (from the repository root):
+<a id="caveats"></a>
 
-```bash
-# single-stream timings + batched step-time scan
-python -m bench.gb10.bench_local --variant CustomVoice --weights fp8 --batch 1,8,32,64,128,256
+## ⚠️ Honest caveats
 
-# accuracy: 300 texts per weight format, Whisper large-v3 WER
-python -m bench.gb10.acc_local --weights bf16,fp8 --n 300 --manifest /root/manifest.json
+- One box, one model variant and one voice. Throughput between runs at 64 clients ranged from 88 to 122 audio-s/s.
+- sglang-omni at 1, 128 and 256 clients and vLLM-Omni were measured two days before the other runs, on the same machine.
+- The first start compiles and captures every kernel and graph and takes many minutes with hybrid weights.
+- sglang-omni needs a one-line patch to start on GB10, because one of its Triton kernels exceeds the chip's shared memory.
 
-# codec decoder: fused vs unfused path (waveform SNR + time per stream-frame)
-python -m bench.gb10.codec_fuse_test --cases 64x2,256x2
+<a id="repo-map"></a>
 
-# streaming HTTP head-to-head on the box (engine process + Go gateway, or a running competitor server)
-python -m bench.gb10.h2h_local --system uqt --weights fp8
-```
+## 🗺️ Repo map
 
-The accuracy manifest is the LibriSpeech test-clean set built by `bench/baseline.py::prep`. Further
-profilers and microbenchmarks are in `bench/gb10/`; measured outputs are in `results/gb10/`.
+| Path | What it is |
+|---|---|
+| `media/film.py` | the launch film |
+| `uqt/` | engines, kernels, FP8 weights, streaming codec, engine process |
+| `gateway/` | Go streaming gateway |
+| `bench/gb10/` | GB10 benchmarks, accuracy checks, profilers |
+| `results/gb10/` | raw measurements; release.json is what this page reads |
+| `docs/` | running, techniques, benchmarks |
+| `tools/release_numbers.py` | raw runs to release.json |
 
-Switches: `--weights bf16|fp8` selects the weight format; `UQT_BATTN=0` turns off batched decode
-attention; `UQT_RES_UNIT=0`, `UQT_FUSED_TRANS=0` and `UQT_MM_RES=0` disable individual fused codec
-kernels for A/B comparisons; `UQT_FP8_BIG=0` keeps bf16 weights above 128 rows; `UQT_KV_TRITON=0`
-uses indexed assignment for cache writes; `UQT_KV=bf16|int8|fp8` selects the batched KV cache format
-(default int8).
+---
 
-`UQT_PACK_MIN=0` (prefill sizes of 32-96 tokens) cuts first byte by 4-5 ms at 32-64 clients, but WER was
-higher in the same test (excluding garbled clips, +0.19 points against the earlier settings, CI 0.03 to
-0.35), so it is off. Prompt riding (prompt tokens as extra rows of the batched step) was bounded, not ported:
-it could save at most about 10% of a step at 32-128 streams and 1-2% at 256, and would add a step to the
-first byte (`bench/gb10/ride_bound.py`).
-
-Server experiments kept as opt-in switches (measured on GB10, no throughput gain at 1-256 clients):
-`UQT_K_HIGH=4` (4-frame steps under load), `UQT_ADMIT_MIN=4` (batch admissions under load),
-`UQT_EARLY_CHUNKS=2` (never defer the second audio chunk; fewer underruns at 64 clients only).
-FP4 weights (`--weights fp4`, e2m1 with a bf16 scale per 32 weights) are kept opt-in: the rewritten
-FP4 kernel beats FP8 on single-row GEMMs (talker MLP up-projection 0.073 vs 0.112 ms) and the
-300-clip WER is 2.45% (one catastrophic failure included), but end to end it only improves
-single-stream generation from 13.7 to 13.1 ms/frame, while prefill and batches above 16 rows get
-slower (the code predictor's small GEMMs are latency-bound, not bandwidth-bound). GB10 has native
-FP4 tensor-core instructions, but Triton (3.4 and 3.7) lowers `tl.dot_scaled` on sm_121 to a
-software upcast plus bf16 MMA, so they are not used here.
-Measured but not adopted: a W8A8 Triton GEMM (FP8 activations per row per K block) ran no faster
-than the FP8 weight-only kernel on GB10 and had higher error (`results/gb10/w8a8_triton_test.json`).
-
-## Techniques
-
-- **FP8 weight-only GEMMs** (`uqt/wq.py`): linear weights stored as float8 e4m3 with one fp32
-  scale per output channel, dequantized in registers inside Triton kernels; tensor-core math stays
-  bf16. Half the weight bytes of bf16 per decode step. Above 128 rows a second kernel with a
-  row-tile-fastest grid (each weight tile read from DRAM about once) is used where it measured
-  faster: every shape up to 192 rows, the widest projections up to 320 (+19-21% engine throughput at
-  160-192 streams). Prefill-sized calls use bf16 weights.
-- **Hybrid FP8 + FP4 weights with 1-2 row GEMVs** (`--weights hyb`): every linear keeps an FP8 copy
-  (prefill, batches) and an FP4 copy (e2m1, bf16 scale per 32). With one or two rows, as in
-  single-stream decode, a multiply-reduce GEMV on CUDA cores reads the FP4 copy at ~190-260 GB/s
-  instead of padding the row to 16 for tensor cores: single-stream generation 13.7 -> 9.25 ms/frame.
-  A persistent megakernel for the code predictor was measured first and gave nothing: CUDA-graph
-  replayed GEMVs already stream weights at the bandwidth limit (`results/gb10/mega_micro.json`).
-- **Batched live-length decode attention** (`kernels.bdec_attn`): one kernel attends every active
-  stream over only its own live KV length instead of padding to the longest stream in the batch.
-- **Fused streaming codec kernels** (`uqt/streaming_codec.py`), on the stateful, frame-exact
-  streaming decoder:
-  - fused residual unit: conv1 + activation + conv2 + residual add in one kernel;
-  - fused block entry: SnakeBeta + transposed convolution as one implicit GEMM;
-  - fused output convolution with the final SnakeBeta folded in.
-- **Tensor-core decode attention** (`UQT_BATTN_KIND=dot`, default; ported from the H100 backport):
-  the two query heads of each kv head padded to 16 rows and attended with `tl.dot`, +1-3% engine
-  throughput on GB10 (`UQT_BATTN_KIND=fma` restores the CUDA-core kernel).
-- **INT8 KV cache for the batched engine** (`UQT_KV=int8`, default): every (token, kv head) row of
-  K and V is stored as int8 with its own fp32 absmax scale, quantized inside the cache-write kernel;
-  the attention kernel converts int8 to bf16 exactly and applies the scales to the logits (K) and to
-  the probabilities (V). It halves the cache bytes read, and the attention kernel alone is 1.6-1.8x
-  faster than BF16 at 128-256 streams (2.7x at 64 streams x 200 tokens, where the smaller cache
-  fits in L2; `results/gb10/kv8_micro.json`, synthetic Gaussian keys). Plain e4m3 is
-  available as `UQT_KV=fp8`. On a second GB10, three servers per format run alternately
-  (`results/gb10/kv_server_runs.json`, mean of server means, audio-s/s): 64 clients 101.8 (BF16) vs
-  114.3 (INT8), 128 clients 122.4 vs 140.0, with no overlap between the runs; 256 clients 156.0 vs
-  165.9, where the runs overlap (BF16 128-165, INT8 151-182). Median per-stream RTF was 6-9% lower
-  with INT8 in each of the three pairs at 128 and 256 clients. The earlier single runs on the first
-  GB10 showed no gain at 64 (103.0 vs 101.9) or 128 clients (129.3 vs 130.6).
-  Batched WER, 300 texts x 5 seeds (1,500 clips per format, 256 slots, hybrid weights,
-  `bench/gb10/kv_wer_stats.py`): BF16 2.09%, INT8 1.81%, FP8 2.21%; clips over 50% errors 2, 1 and 4.
-  INT8 minus BF16 is -0.28 points (95% bootstrap CI over texts -0.62 to +0.01), so INT8 shows no
-  loss and no proven gain; FP8 minus BF16 is +0.13 (-0.31 to +0.60). On the real cache (24 prompts,
-  one step, BF16 weights, `results/gb10/kv_real_error.json`) the mean row error is 1.4% (K) and 0.8%
-  (V) for INT8 against 2.6% and 2.7% for FP8.
-- **Single-launch K/V cache writes** for the batched step (`kernels.kv_write_rows`).
-- **Tuned implicit-GEMM tiles**: tile shapes per decoder width (including the 768-wide units),
-  swept on GB10 at the shapes the batched engine runs.
-- Carried over from the H100 engines: CUDA-graphed Talker and code-predictor steps, the fused
-  Triton code predictor, continuous batching with packed prefill, and per-voice cached codec state.
-
-## Results (GB10)
-
-Single stream:
-
-| Configuration | ms / frame | RTF | TTFA |
-|---|---|---|---|
-| Stock reference implementation | - | 0.72 | - |
-| uqt, bf16 | 28.3 | 0.38 | 47 ms |
-| uqt, FP8 weights | 13.6 | 0.18 | 25 ms |
-| uqt, hybrid FP8 + FP4 weights (`--weights hyb`) | **9.25** | **0.127** | **20.6 ms** |
-
-Accuracy (300 clips, Whisper large-v3 WER, excluding catastrophic failures): bf16 2.82%, FP8 1.70%,
-hybrid FP8 + FP4 2.05% (one catastrophic failure in each of FP8 and hybrid).
-One seed each: no FP8 loss is visible here, but the run-to-run spread was not measured, so this
-does not rank the three.
-
-Batched engine throughput (audio seconds generated per second, engine only):
-
-| Streams | 1 | 8 | 32 | 64 | 128 | 160 | 192 | 256 |
-|---|---|---|---|---|---|---|---|---|
-| bf16 | 2.7 | 21.9 | 73.4 | 114.5 | 157.9 | - | - | 193.0 |
-| FP8 + batched attention + fused codec + large-batch FP8 GEMMs | **5.4** | **40.8** | **126.3** | **197.0** | **233.4** | **273.7** | **289.9** | **289.9** |
-
-N streams in real time need N audio-s/s, so every configuration above runs all its streams faster
-than real time, including 256 (289.9 audio-s/s).
-
-Accuracy of the batched serving path: all 300 texts through the batched engine at 256 slots
-(FP8, large-batch FP8 GEMMs, fused codec) give 1.89% WER excluding one catastrophic failure, at
-parity with the single-stream runs above.
-
-Codec decoder time per stream-frame at 256 streams x 2 frames: **157 us -> 99 us** with the fused
-kernels. Against an fp32 decode, the waveform is about 28 dB SNR for both the old and the fused
-paths (the fused path equal or slightly closer).
-
-### Head-to-head on GB10
-
-Streaming HTTP (`/v1/audio/speech`, raw PCM), CustomVoice, voice Ryan, measured on one GB10 with the
-same multi-process client (`bench/gb10/h2h_local.py`), one server at a time, default settings for uqt.
-Each client sends requests back to back. One run at 1 client, three at 8-64, two at 128-256; ranges
-are the spread of those runs. uqt and sglang-omni at 8-64 were measured on the same day
-(`results/gb10/final2-uqt.jsonl`, `comp2-sglang.jsonl`); vLLM-Omni, and sglang-omni at 1, 128 and 256,
-two days earlier on the same machine (`comp-*.jsonl`).
-
-| Clients | uqt (engine process + Go gateway; hybrid weights, INT8 KV) | vLLM-Omni 0.32 (2-stage default) | sglang-omni 0.2 |
-|---|---|---|---|
-| 1 | 9 / 32 / 33 / 42 | 2 / 56 / 60 / 873 | 3 / 79 / 79 / 89 |
-| 8 | 29-31 / 77-78 / 81-84 / 88 | 12-14 / 96-111 / 126-132 / 1023-1042 | 13-16 / 101-106 / 112-114 / 112-115 |
-| 16 | 44-50 / 76-80 / 110-116 / 86-92 | not measured | 25-26 / 114-117 / 328-392 / 125-127 |
-| 32 | 73-80 / 87-90 / 128-136 / 100-105 | 29-30 / 155-168 / 223-240 / 1853-1896 | 40-44 / 93-97 / 458-464 / 200-207 |
-| 64 | 88-122 / 91-93 / 162-170 / 161-164 | 37 / 266-267 / 356-377 / 3104-3172 | 63-65 / 100-104 / 462-486 / 260-264 |
-| 128 | 127-138 / 229-231 / 392-393 / 312-321 | 40 / 10275-10539 / 11286-11760 / 13299-13542 | 70-71 / 4558-4710 / 6416-6542 / 4698-4842 (33-34 of 384 failed) |
-| 256 | 183-192 / 324 / 1076-1188 / 415 | 42 / 31039-31511 / 32571-32719 / 34078-34506 | 72 / 4834-5007 / 6120-6214 / 5008-5219 (422-434 of 768 failed) |
-
-Cells: throughput (audio-s/s) / first byte p50 / first byte p90 / voice heard p50 (ms). "Voice heard"
-is when a listener hears the voice: first byte, plus any stall, plus the silence a clip opens with.
-uqt drops up to 100 ms of that silence (about 90 ms, `UQT_TRIM_MAX_MS=0` keeps it) while a generation
-step takes at most 56 ms, so that it shows up at up to 32 clients, and at 41-64 streams it keeps at least 60 ms
-of the first frame (see the serving loop below); sglang-omni's clips start almost at once on their own.
-
-- uqt leads on throughput, voice heard, and first byte (p50 and p90) at every load measured. It
-  completed every request; sglang-omni rejected about 9% at 128 and 55% at 256 ("request queue is
-  full", its default limits).
-- **Not a win:** per-stream RTF at 256 (0.98 against 0.84, on the streams sglang-omni kept). The margin on
-  median first byte at 32 clients is small (3-10 ms).
-- One of the three 64-client uqt runs was slower in throughput than the others (88 audio-s/s; the other two
-  were above 100).
-
-Playback gaps: median RTF / share of requests with any chunk later than real-time playback started
-at the first byte (no client buffer, any size of delay counts) / p90 of the worst delay per request in ms:
-
-| Clients | uqt | vLLM-Omni | sglang-omni |
-|---|---|---|---|
-| 1 | 0.12 / 0% / 0 | 0.40 / 100% / 722 | 0.37 / 0% / 0 |
-| 8 | 0.21 / 17-25% / 13-22 | 0.47 / 100% / 884 | 0.38 / 29-33% / 75-87 |
-| 16 | 0.23 / 8% / 0 | not measured | 0.42 / 21-40% / 12-38 |
-| 32 | 0.29 / 3-4% / 0 | 0.82 / 100% / 1702 | 0.54 / 65-72% / 131-165 |
-| 64 | 0.41 / 5-9% / 0 | 1.38 / 100% / 5576 | 0.75 / 97-99% / 421-456 |
-| 128 | 0.64 / 4-10% / 0 | 1.50 / 100% / 6577 | 0.84 / 100% / 435 |
-| 256 | 0.98 / 60-63% / 75-97 | 1.50 / 100% / 6582 | 0.84 / 98% / 430 |
-
-At 1-128 clients a client with a small buffer hears no gaps (p90 delay at most about 22 ms, at 8 clients,
-where the silence trim removes part of the buffer). At 256 generation runs at real time with no
-headroom, so about two thirds of requests have a late chunk (p90 about 75-140 ms).
-
-Word error rate through the running server under load (INT8 KV, hybrid weights, 300 texts x 4 interleaved
-runs at each of 64 and 256 clients = 2,400 clips per setting; `results/gb10/swer-reps`): settings before
-the changes below 2.23% (9 clips over 50% errors, 1.85% without them), current settings 2.12% (3 clips,
-1.93%). Current minus earlier is -0.11 points (95% bootstrap CI over texts -0.52 to +0.27), so no loss
-was measured. Clips over 25 s, at 256 clients over 3,000 clips each: 1 earlier, 2 now.
-
-All three systems through their own servers on one GB10 (a second unit of the same model; `bench/gb10/werq.sh`,
-`bench/gb10/wer3_stats.py`, `results/gb10/wer3`): the same 300 texts, 4 runs at 32 and 4 at 64 clients, 2,400 clips
-per system, every clip different audio, Whisper large-v3, uqt with final default settings.
-
-| System | WER | Excluding garbled clips (>50% errors) | Garbled | Failed requests |
-|---|---|---|---|---|
-| uqt | 2.46% | 1.91% | 9 | 0 |
-| sglang-omni 0.2 | 1.96% | 1.87% | 3 | 0 |
-| vLLM-Omni 0.32 | 2.93% | 1.97% | 3 | 1 (ran to its 640-token limit without ending) |
-
-- Differences (95% bootstrap CI over texts): uqt minus sglang-omni +0.50 (+0.07 to +1.04), excluding garbled clips
-  +0.04 (-0.12 to +0.20); uqt minus vLLM-Omni -0.47 (-2.53 to +0.79), excluding garbled -0.06 (-0.24 to +0.12).
-- **Not level with sglang-omni on overall WER:** on ordinary clips all three agree, but uqt made more garbled clips in
-  this test (9 against 3, Fisher exact p = 0.15, so the counts alone do not prove a higher rate). Three of uqt's nine
-  are one text with unusual spelling, scored in different runs; four are runaways of 25-32 s.
-- sglang-omni also caps a clip's length from its text. Cutting uqt's audio at that cap, offline, lowers uqt to 2.32%
-  (+0.35 against sglang-omni, CI +0.02 to +0.74), so the cap explains only part of the difference.
-
-Serving loop (`uqt/engine_proc.py`), changed after the earlier tables:
-- Host-to-GPU copies in the step launch and decode are non-blocking (`UQT_ASYNC_H2D`). A blocking copy
-  waited for the step that was just launched, so decode and admission did not overlap generation.
-- A request that arrives while a step runs joins the next step (`UQT_LATE_ADMIT`).
-- A stream's pending audio goes out early when its client buffer is about to run dry, before the chunk
-  is full (`UQT_DEADLINE`, `UQT_DEADLINE_MARGIN_MS`, 120). Requests with a late chunk at 128 clients went from
-  about 99% of requests to a few percent.
-- One-frame steps (`UQT_K_LOW_FROM`, `UQT_K_LOW_AT`: above 8 and up to 64 streams, active or queued) let a
-  request wait for a shorter step. From 41 to 64 streams (`UQT_FRESH1_FROM`, `UQT_FRESH1_AT`) the step that
-  admits a stream is one frame and that frame is sent at once, with at least 60 ms of it kept
-  (`UQT_F1_KEEP_MS`), so the model's opening silence plays while the next frame is generated. Both are off
-  during a burst (more than `UQT_BURST_N`=24 admissions in half a second). A/B in one server, 4 rounds
-  (`results/gb10/ab-firstbyte5.json`), first byte p50: 103 -> 89 ms at 32 clients, 134 -> 90 at 64; voice heard 115 -> 104 and
-  220 -> 161; throughput at 48 and 64 clients 4-5% lower; gaps over 20 ms no more frequent at 48-256, about
-  a point more at 16-32; any gap at 128 6% -> 12% (almost all under 20 ms). Server WER at 32 and 64 clients, 2,400 clips per
-  setting (`results/gb10/swer-firstbyte`, before the burst rule and with a 72-80 stream cap): 2.29% before, 2.15% with
-  it (6 and 7 clips over 50% errors, 1.91% for both without them); difference -0.13 (95% CI -0.57 to
-  +0.28). Not helpful: pinned copies in prefill admission, other admission lead times, decoding first chunks before the step.
-  A one-frame and a two-frame decode of the same codes agree to 33 dB SNR.
-- Chunks of one stream are always delivered in order; `engine_proc` counts any that are not (`ooo`).
-
-Setup notes for both competitor stacks on sm_121 (aarch64 wheels, a one-line `num_stages` patch
-for an sglang-omni Triton kernel that exceeds GB10's 99 KiB shared memory) are in
-`bench/gb10/competitors/`. vLLM-Omni's fused single-GPU profile does not start on GB10 (a Triton
-kernel in its MTP graph capture needs 136 KiB of shared memory), so the default 2-stage profile is
-the one measured.
-
-## Layout
-
-```
-uqt/            single-stream and batched engines, kernels, FP8 weight-only GEMMs,
-                streaming codec, engine process and HTTP server
-gateway/        Go streaming gateway in front of the engine process
-bench/gb10/     on-box GB10 benchmarks, accuracy check, profilers, microbenchmarks
-bench/          H100 Modal benchmarks (baseline, engine_bench, eval_large, load_test, h2h/)
-results/gb10/   GB10 measurements
-results/h100/   H100 measurements carried over from the origin repositories
-```
-
-## Origin
-
-This repository started from the H100 work: the single-stream engine in
-[`amw720386/ultra-qwen3-tts`](https://github.com/amw720386/ultra-qwen3-tts) and the batched
-engine in
-[`amw720386/ultra-qwen3-tts-multistream`](https://github.com/amw720386/ultra-qwen3-tts-multistream),
-where H100 results and head-to-head comparisons are documented. The H100 Modal scripts under
-`bench/` and their results under `results/h100/` are kept for reference.
+<div align="center"><sub>The code predictor and streaming codec decoder are adapted from vLLM-Omni (Apache-2.0). Built at Magni.</sub></div>

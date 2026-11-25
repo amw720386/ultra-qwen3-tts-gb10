@@ -1,0 +1,196 @@
+# README, charts and video, built with video-readme-tweet-maker. Every number comes from results/gb10/release.json
+# (tools/release_numbers.py writes it from the raw runs).
+project:
+  name: ultra-qwen3-tts-gb10
+  emoji: "🔊"
+  tagline: Streaming Qwen3-TTS on one NVIDIA GB10, at {{ n.vs_sglang }} the throughput of sglang-omni.
+  repo: amw720386/ultra-qwen3-tts-gb10
+hero:
+  title: ultra-qwen3-tts-gb10
+  subtitle: Qwen3-TTS 1.7B · one GB10 · 1 to 256 streams
+theme: {accent: "#3b82f6", accent2: "#8a98ad", accent3: "#56627a", bg: "#05080f", panel: "#0a111c", line: "#1c2636"}
+badges:
+  - {label: license, message: Apache-2.0, color: blue, link: LICENSE}
+  - {label: model, message: Qwen3-TTS-12Hz-1.7B, color: 6f42c1}
+  - {label: GPU, message: NVIDIA GB10, color: 76b900}
+
+numbers:
+  vs_sglang:    {file: results/gb10/release.json, path: throughput_vs.sglang.geomean, unit: "×", fmt: "{:.1f}"}
+  vs_sglang_lo: {file: results/gb10/release.json, path: throughput_vs.sglang.min, unit: "×", fmt: "{:.1f}"}
+  vs_sglang_hi: {file: results/gb10/release.json, path: throughput_vs.sglang.max, unit: "×", fmt: "{:.1f}"}
+  vs_vllm:      {file: results/gb10/release.json, path: throughput_vs.vllm.geomean, unit: "×", fmt: "{:.1f}"}
+  t8:           {file: results/gb10/release.json, path: head_to_head.id=uqt-8.throughput, fmt: "{:.1f}"}
+  t8_sglang:    {file: results/gb10/release.json, path: head_to_head.id=sglang-8.throughput, fmt: "{:.1f}"}
+  t8_vllm:      {file: results/gb10/release.json, path: head_to_head.id=vllm-8.throughput, fmt: "{:.1f}"}
+  rtf256:       {file: results/gb10/release.json, path: head_to_head.id=uqt-256.rtf_p50, fmt: "{:.2f}"}
+  rtf256_sglang: {file: results/gb10/release.json, path: head_to_head.id=sglang-256.rtf_p50, fmt: "{:.2f}"}
+  late128:      {file: results/gb10/release.json, path: head_to_head.id=uqt-128.late_pct, unit: "%", fmt: "{:.0f}"}
+  late256:      {file: results/gb10/release.json, path: head_to_head.id=uqt-256.late_pct, unit: "%", fmt: "{:.0f}"}
+  late256_ms:   {file: results/gb10/release.json, path: head_to_head.id=uqt-256.late_p90_ms, unit: " ms", fmt: "{:.0f}"}
+  rej256:       {file: results/gb10/release.json, path: head_to_head.id=sglang-256.failed}
+  req256:       {file: results/gb10/release.json, path: head_to_head.id=sglang-256.requests}
+  rej128:       {file: results/gb10/release.json, path: head_to_head.id=sglang-128.failed}
+  req128:       {file: results/gb10/release.json, path: head_to_head.id=sglang-128.requests}
+  ms_bf16:      {file: results/gb10/release.json, path: single_stream.weights=BF16.ms_per_frame, unit: " ms", fmt: "{:.1f}"}
+  ms_fp8:       {file: results/gb10/release.json, path: single_stream.weights=FP8.ms_per_frame, unit: " ms", fmt: "{:.1f}"}
+  ms_hyb:       {file: results/gb10/release.json, path: single_stream.weights=FP8 + FP4.ms_per_frame, unit: " ms", fmt: "{:.2f}"}
+  wer_uqt: {file: results/gb10/release.json, path: server_wer.uqt.wer_pct, unit: "%", fmt: "{:.2f}"}
+  werx_uqt: {file: results/gb10/release.json, path: server_wer.uqt.wer_pct_without_those, unit: "%", fmt: "{:.2f}"}
+  bad_uqt: {file: results/gb10/release.json, path: server_wer.uqt.over_half_wrong, unit: "", fmt: "{:.0f}"}
+  wer_sglang: {file: results/gb10/release.json, path: server_wer.sglang.wer_pct, unit: "%", fmt: "{:.2f}"}
+  werx_sglang: {file: results/gb10/release.json, path: server_wer.sglang.wer_pct_without_those, unit: "%", fmt: "{:.2f}"}
+  bad_sglang: {file: results/gb10/release.json, path: server_wer.sglang.over_half_wrong, unit: "", fmt: "{:.0f}"}
+  wer_vllm: {file: results/gb10/release.json, path: server_wer.vllm.wer_pct, unit: "%", fmt: "{:.2f}"}
+  werx_vllm: {file: results/gb10/release.json, path: server_wer.vllm.wer_pct_without_those, unit: "%", fmt: "{:.2f}"}
+  bad_vllm: {file: results/gb10/release.json, path: server_wer.vllm.over_half_wrong, unit: "", fmt: "{:.0f}"}
+  wer_clips: {file: results/gb10/release.json, path: server_wer.uqt.clips}
+
+intro: |
+  ultra-qwen3-tts-gb10 is a streaming inference engine for
+  [Qwen3-TTS-12Hz-1.7B](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) on the NVIDIA GB10. It is Python and Triton on
+  PyTorch, with a Go gateway that streams raw PCM over HTTP. Decode on this chip is limited by its 273 GB/s of unified memory, so most of
+  the work goes into reading fewer bytes per step.
+
+  [![Launch film: one grey figure speaks, the head opens to show the model running, 128 figures speak at once, and three crowds race to the first word](assets/launch-poster.jpg)](assets/launch.mp4)
+
+  *Launch film (27 s). Click to play. The layer, step and stream counts, the start times and the throughput are the real ones. The speech, and which tiles light, are illustrative. Made with [`media/film.py`](media/film.py).*
+
+  <p align="center"><img src="assets/race.gif" width="900" alt="Three crowds of 128 press play together. Ours is heard after 0.32 s, sglang-omni after 4.77 s, and vLLM-Omni is still silent"></p>
+
+  *128 clients on one GB10, shown in real time. Each crowd lights up at its median time until the voice is heard. vLLM-Omni's is 13.4 s, after the clip ends.*
+
+tables:
+  - id: latency
+    title: First byte and voice heard, median in ms (lower is better)
+    file: results/gb10/release.json
+    rows_path: latency
+    columns:
+      - {key: clients, title: Clients, align: right}
+      - {key: uqt_first, title: "First byte, this engine", align: right, fmt: "{:,.0f}"}
+      - {key: sglang_first, title: "sglang-omni", align: right, fmt: "{:,.0f}"}
+      - {key: vllm_first, title: "vLLM-Omni", align: right, fmt: "{:,.0f}"}
+      - {key: uqt_heard, title: "Voice heard, this engine", align: right, fmt: "{:,.0f}"}
+      - {key: sglang_heard, title: "sglang-omni", align: right, fmt: "{:,.0f}"}
+      - {key: vllm_heard, title: "vLLM-Omni", align: right, fmt: "{:,.0f}"}
+charts:
+  - id: throughput
+    type: gbar
+    title: Throughput by number of clients
+    subtitle: audio seconds generated per second · one GB10 · streaming HTTP · medians
+    file: results/gb10/release.json
+    rows_path: head_to_head
+    cat: clients
+    series: system
+    y: throughput
+    fmt: "{:.0f}"
+  - id: late
+    type: gbar
+    title: Requests with a late audio chunk
+    subtitle: percent of requests · no client buffer · any delay counts · medians
+    file: results/gb10/release.json
+    rows_path: head_to_head
+    cat: clients
+    series: system
+    y: late_pct
+    ymax: 100
+    fmt: "{:.0f}"
+    better: lower
+  - id: single
+    type: bar
+    title: Generation time per audio frame, one stream
+    subtitle: milliseconds · one frame is 80 ms of audio
+    better: lower
+    items:
+      - {label: BF16 weights, number: ms_bf16}
+      - {label: FP8 weights, number: ms_fp8}
+      - {label: FP8 + FP4 weights, number: ms_hyb, highlight: true}
+diagrams:
+  - id: request-path
+    title: From request to audio
+    nodes:
+      - {id: c, label: client, sub: "POST /v1/audio/speech", col: 0, row: 0, kind: io}
+      - {id: g, label: Go gateway, sub: "HTTP, one goroutine per stream", col: 1, row: 0}
+      - {id: e, label: engine process, sub: "continuous batching, packed prefill", col: 2, row: 0}
+      - {id: t, label: Talker + predictor, sub: "one CUDA graph per step", col: 2, row: 1}
+      - {id: k, label: streaming codec, sub: "fused Triton kernels", col: 1, row: 1}
+      - {id: o, label: PCM chunks, sub: "s16le, 24 kHz", col: 0, row: 1, kind: io}
+    edges:
+      - {from: c, to: g}
+      - {from: g, to: e, label: Unix socket}
+      - {from: e, to: t}
+      - {from: t, to: k, label: codes}
+      - {from: k, to: o, label: audio}
+
+sections:
+  - title: Results
+    emoji: "📈"
+    id: results
+    body: |
+      One GB10, Qwen3-TTS-12Hz-1.7B CustomVoice, streaming HTTP. Every server ran alone on the same box with the same multi-process client,
+      each client sending requests back to back: three runs at 8 to 64 clients, two at 128 and 256, and one run of three requests at 1 client.
+      vLLM-Omni 0.32 and sglang-omni 0.2 ran at their default limits ([setups](docs/benchmarks.md#competitor-setups)).
+    charts: [throughput]
+    tables: [latency]
+    after: |
+      "Voice heard" is when a listener hears speech: the first byte, plus any stall, plus the silence a clip opens with.
+
+      - ✅ **Throughput:** {{ n.vs_sglang_lo }} to {{ n.vs_sglang_hi }} sglang-omni, and {{ n.vs_vllm }} vLLM-Omni as a geometric mean over the loads measured.
+      - ✅ **Every request completed.** sglang-omni rejected {{ n.rej128 }} of {{ n.req128 }} at 128 clients and {{ n.rej256 }} of {{ n.req256 }} at 256, at its default queue limit.
+      - ❌ **Behind:** real-time factor at 256 clients, {{ n.rtf256 }} against {{ n.rtf256_sglang }} on the requests sglang-omni kept.
+      - 🧪 **Not measured:** vLLM-Omni at 16 clients, and more than one GB10.
+  - title: Does it keep up with playback?
+    emoji: "🎧"
+    id: playback
+    charts: [late]
+    body: |
+      Up to 128 clients a small client buffer hides the gaps. At 256 the engine generates at real time with no headroom, so {{ n.late256 }} of
+      requests have a late chunk, by {{ n.late256_ms }} at p90.
+  - title: How it works
+    emoji: "🧩"
+    id: how-it-works
+    images:
+      - {src: assets/inside.gif, alt: "Inside the head: a token passes 28 Talker layers, 15 predictor steps and the codec, and leaves the mouth as one 80 ms frame", width: "900"}
+    diagrams: [request-path]
+    body: |
+      FP8 weights halve what each step streams from memory, batched attention reads only each stream's own live KV, and the codec decoder's stages are
+      fused into single kernels. Details: [docs/techniques.md](docs/techniques.md).
+    charts: [single]
+  - title: Accuracy
+    emoji: "🎯"
+    id: accuracy
+    body: |
+      Word error rate through each system's own server on one GB10, with final default settings: the same 300 LibriSpeech test-clean texts, four runs at
+      each of 32 and 64 clients, {{ n.wer_clips }} clips from this engine, scored with Whisper large-v3 ([intervals](docs/benchmarks.md#accuracy-through-the-server)).
+
+      | System | WER | Excluding garbled clips | Garbled clips |
+      |---|---:|---:|---:|
+      | This engine | {{ n.wer_uqt }} | {{ n.werx_uqt }} | {{ n.bad_uqt }} |
+      | sglang-omni 0.2 | {{ n.wer_sglang }} | {{ n.werx_sglang }} | {{ n.bad_sglang }} |
+      | vLLM-Omni 0.32 | {{ n.wer_vllm }} | {{ n.werx_vllm }} | {{ n.bad_vllm }} |
+
+      A garbled clip has more than half its words wrong.
+
+      - 🟰 **Level** on ordinary clips, where all three agree within the interval.
+      - ❌ **Behind** sglang-omni on overall WER, by 0.50 points (95% interval 0.07 to 1.04), because this engine made more garbled clips in this test.
+quickstart:
+  - title: On a GB10, in the NGC PyTorch 25.10 container ([setup](docs/running.md))
+    shell: |
+      (cd gateway && go build -o uqt-gw .)
+      UQT_NO_PDL=1 python -m uqt.engine_proc --sock /tmp/uqt.sock --max-slots 256 --max-len 512 --weights hyb &
+      ./gateway/uqt-gw -sock /tmp/uqt.sock -addr 127.0.0.1:8091 &
+      curl -s http://127.0.0.1:8091/v1/audio/speech -H "Content-Type: application/json" \
+        -d '{"input": "Hello from one GB10.", "voice": "Ryan", "language": "English"}' > out.pcm
+caveats:
+  - "One box, one model variant and one voice. Throughput between runs at 64 clients ranged from 88 to 122 audio-s/s."
+  - "sglang-omni at 1, 128 and 256 clients and vLLM-Omni were measured two days before the other runs, on the same machine."
+  - "The first start compiles and captures every kernel and graph and takes many minutes with hybrid weights."
+  - "sglang-omni needs a one-line patch to start on GB10, because one of its Triton kernels exceeds the chip's shared memory."
+repo_map:
+  - {path: media/film.py, desc: "the launch film"}
+  - {path: uqt/, desc: "engines, kernels, FP8 weights, streaming codec, engine process"}
+  - {path: gateway/, desc: "Go streaming gateway"}
+  - {path: bench/gb10/, desc: "GB10 benchmarks, accuracy checks, profilers"}
+  - {path: results/gb10/, desc: "raw measurements; release.json is what this page reads"}
+  - {path: docs/, desc: "running, techniques, benchmarks"}
+  - {path: tools/release_numbers.py, desc: "raw runs to release.json"}
+footer: "The code predictor and streaming codec decoder are adapted from vLLM-Omni (Apache-2.0). Built at Magni."
