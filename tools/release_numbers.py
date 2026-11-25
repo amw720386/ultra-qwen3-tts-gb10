@@ -59,10 +59,10 @@ def ratio(rows, a, b, c):
     return get[f"{a}-{c}"] / get[f"{b}-{c}"] if f"{b}-{c}" in get else None
 
 
-def wer(pattern):
-    """Pooled corpus WER over the eval files matching a glob; clips with more than half their words wrong are counted apart."""
+def wer(*patterns):
+    """Pooled corpus WER over the eval files matching the globs; clips with more than half their words wrong are counted apart."""
     e = n = e2 = n2 = bad = clips = 0
-    for p in sorted(R.glob(pattern)):
+    for p in sorted(q for pat in patterns for q in R.glob(pat)):
         for r in json.loads(p.read_text(encoding="utf-8"))["rows"]:
             clips += 1
             e += r["errors"]
@@ -72,7 +72,8 @@ def wer(pattern):
             else:
                 e2 += r["errors"]
                 n2 += r["n_ref"]
-    return {"clips": clips, "wer_pct": rnd(100 * e / n, 2), "over_half_wrong": bad, "wer_pct_without_those": rnd(100 * e2 / n2, 2)}
+    return {"clips": clips, "wer_pct": rnd(100 * e / n, 2), "over_half_wrong": bad, "over_half_wrong_pct": rnd(100 * bad / clips, 2),
+            "wer_pct_without_those": rnd(100 * e2 / n2, 2)}
 
 
 def single(name):
@@ -101,7 +102,10 @@ def main():
         "throughput_vs": vs,
         "single_stream": [{"weights": w, **single(f)} for w, f in (("BF16", "baseline-bf16"), ("FP8", "fp8-battn-codec"), ("FP8 + FP4", "gemv-hyb"))],
         # the same 300 texts through each system's own server on one GB10, final default settings
-        "server_wer": {s: wer(f"wer3/{s}-c*/eval.json") for s in ("uqt", "sglang", "vllm")},
+        # the 2,400-clip three-system test, plus the 40-run tests at 64 clients (uqt: before and after the workspace fix)
+        "server_wer": {s: wer(f"wer3/{s}-c*/eval.json", f"garble/{s}-c64-*/eval.json", f"garble/{s}fix-c64-*/eval.json")
+                       for s in ("uqt", "sglang", "vllm")},
+        "server_wer_bf16": wer("garble/uqtbf16-c64-*/eval.json"),
     }
     (R / "release.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps({k: v for k, v in out.items() if k != "head_to_head"}, indent=1))

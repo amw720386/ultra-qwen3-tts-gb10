@@ -84,19 +84,21 @@ fused into single kernels. Details: [docs/techniques.md](docs/techniques.md).
 
 ## 🎯 Accuracy
 
-Word error rate through each system's own server on one GB10, with final default settings: the same 300 LibriSpeech test-clean texts, four runs at
-each of 32 and 64 clients, 2,400 clips from this engine, scored with Whisper large-v3 ([intervals](docs/benchmarks.md#accuracy-through-the-server)).
+Word error rate through each system's own server on one GB10, with final default settings: the same 300 LibriSpeech test-clean texts at
+32 and 64 clients, up to 88 runs, scored with Whisper large-v3: 26,400 clips from this engine, 14,400 from sglang-omni and 2,399 from
+vLLM-Omni ([intervals](docs/benchmarks.md#accuracy-through-the-server)).
 
 | System | WER | Excluding garbled clips | Garbled clips |
 |---|---:|---:|---:|
-| This engine | 2.46% | 1.91% | 9 |
-| sglang-omni 0.2 | 1.96% | 1.87% | 3 |
-| vLLM-Omni 0.32 | 2.93% | 1.97% | 3 |
+| This engine | 2.34% | 1.92% | 53 (0.20%) |
+| sglang-omni 0.2 | 2.33% | 1.94% | 29 (0.20%) |
+| vLLM-Omni 0.32 | 2.93% | 1.97% | 3 (0.13%) |
 
 A garbled clip has more than half its words wrong.
 
-- 🟰 **Level** on ordinary clips, where all three agree within the interval.
-- ❌ **Behind** sglang-omni on overall WER, by 0.50 points (95% interval 0.07 to 1.04), because this engine made more garbled clips in this test.
+- 🟰 **Level** with sglang-omni: overall WER +0.01 points (95% interval -0.37 to +0.39), 53 garbled clips of 26,400 against 29 of 14,400 (Fisher exact p = 1.0).
+- 🧪 **Small sample:** vLLM-Omni has 2,399 clips, so its overall WER is uncertain (this engine's is 0.47 points lower in the test they shared, 95% interval 2.53 lower to 0.79 higher).
+- ℹ️ An earlier 2,400-clip test had this engine behind by 0.50 points (9 garbled clips against 3). That test is part of the numbers above; six times more clips did not repeat the gap.
 
 <a id="quick-start"></a>
 

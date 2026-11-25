@@ -459,22 +459,32 @@
  ],
  "server_wer": {
   "uqt": {
-   "clips": 2400,
-   "wer_pct": 2.46,
-   "over_half_wrong": 9,
-   "wer_pct_without_those": 1.91
+   "clips": 26400,
+   "wer_pct": 2.34,
+   "over_half_wrong": 53,
+   "over_half_wrong_pct": 0.2,
+   "wer_pct_without_those": 1.92
   },
   "sglang": {
-   "clips": 2400,
-   "wer_pct": 1.96,
-   "over_half_wrong": 3,
-   "wer_pct_without_those": 1.87
+   "clips": 14400,
+   "wer_pct": 2.33,
+   "over_half_wrong": 29,
+   "over_half_wrong_pct": 0.2,
+   "wer_pct_without_those": 1.94
   },
   "vllm": {
    "clips": 2399,
    "wer_pct": 2.93,
    "over_half_wrong": 3,
+   "over_half_wrong_pct": 0.13,
    "wer_pct_without_those": 1.97
   }
+ },
+ "server_wer_bf16": {
+  "clips": 12000,
+  "wer_pct": 2.36,
+  "over_half_wrong": 30,
+  "over_half_wrong_pct": 0.25,
+  "wer_pct_without_those": 1.86
  }
 }

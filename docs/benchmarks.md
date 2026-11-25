@@ -110,11 +110,34 @@ per system, every clip different audio, Whisper large-v3, uqt with final default
 
 - Differences (95% bootstrap CI over texts): uqt minus sglang-omni +0.50 (+0.07 to +1.04), excluding garbled clips
   +0.04 (-0.12 to +0.20); uqt minus vLLM-Omni -0.47 (-2.53 to +0.79), excluding garbled -0.06 (-0.24 to +0.12).
-- **Not level with sglang-omni on overall WER:** on ordinary clips all three agree, but uqt made more garbled clips in
-  this test (9 against 3, Fisher exact p = 0.15, so the counts alone do not prove a higher rate). Three of uqt's nine
-  are one text with unusual spelling, scored in different runs; four are runaways of 25-32 s.
+- uqt made 9 garbled clips against 3 (Fisher exact p = 0.15). Three of uqt's nine are one text with unusual spelling, scored in different
+  runs; four are runaways of 25-32 s. This gap did not repeat in the larger test below.
 - sglang-omni also caps a clip's length from its text. Cutting uqt's audio at that cap, offline, lowers uqt to 2.32%
   (+0.35 against sglang-omni, CI +0.02 to +0.74), so the cap explains only part of the difference.
+
+A larger test of the same texts and servers, at 64 clients on another GB10 (`bench/gb10/garbleq.sh`, `bench/gb10/garble_stats.py`,
+`results/gb10/garble`, `results/gb10/garble_stats.json`): 40 runs of 300 clips per setting = 12,000 clips, no failed requests. `uqt`
+is the engine before the hang fix described below, `uqtfix` the same settings with it, and `uqtbf16` unquantized weights and KV with the fix.
+
+| Setting | WER (95% bootstrap CI over texts) | Excluding garbled clips | Garbled clips (95% Wilson CI) | Over 25 s |
+|---|---|---|---|---|
+| uqt, default, fixed | 2.48% (1.85 to 3.20) | 1.89% | 20, 0.17% (0.11 to 0.26) | 3 |
+| uqt, default, before the fix | 2.17% (1.76 to 2.61) | 1.94% | 24, 0.20% (0.13 to 0.30) | 4 |
+| uqt, unquantized, fixed | 2.36% (1.82 to 2.99) | 1.86% | 30, 0.25% (0.18 to 0.36) | 4 |
+| sglang-omni 0.2 | 2.40% (1.86 to 3.01) | 1.95% | 26, 0.22% (0.15 to 0.32) | 1 |
+
+- No pair of settings differs in garbled clips (Fisher exact p 0.20 to 0.89), in clips over 25 s (p 0.38 to 1.0) or in overall WER
+  (every interval includes zero). One text (`2094-142345-0024`) sits near the 50% line in every system; leaving it out changes nothing.
+- Excluding garbled clips, unquantized uqt is 0.09 points lower than sglang-omni (0.02 to 0.16) and 0.08 lower than quantized uqt before
+  the fix (0.02 to 0.14): small, and the fixed default against sglang-omni is 0.07 lower (-0.00 to 0.13), so only a hint.
+- All clips of uqt's default settings and both tests: 53 garbled of 26,400, WER 2.34%, against 29 of 14,400 and 2.33% for sglang-omni
+  (WER difference +0.01, CI -0.37 to +0.39; excluding garbled -0.02, CI -0.08 to +0.03).
+
+Hang fixed on the way (`uqt/graphs.py`, `bench/gb10/cublas_ws_race.py`, `results/gb10/cublas_ws_race.log`): captured CUDA graphs shared
+one cuBLAS workspace, and two graphs replayed at once on different streams could deadlock the GPU. Unquantized uqt hung that way in its
+first 64-client run, and again when reproduced. With a workspace per graph pool, unquantized and default uqt both finished 40 runs of
+300 clips without a hang. The micro-test hung in three of three runs without the fix and in none with it. No micro-test output was wrong in either
+case. The default settings before the fix never hung in 40 runs.
 
 ## Competitor setups
 
