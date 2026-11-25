@@ -391,13 +391,25 @@ def main():
     if args.clone_ref:
         global VCP
         import subprocess
-        pcm = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", args.clone_ref, "-f", "f32le", "-ac", "1",
-                              "-ar", "24000", "pipe:1"], stdout=subprocess.PIPE, check=True).stdout
-        VCP = tts.create_voice_clone_prompt(ref_audio=(np.frombuffer(pcm, dtype=np.float32).copy(), 24000),
+        import io
+        import soundfile as sf
+        # decode at the file's native rate (as Baseten's server does via pydub) and let the official
+        # create_voice_clone_prompt resample (librosa): resampling here with ffmpeg gave different reference
+        # codes (13.7% identical) and lower speaker similarity
+        wavb = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", args.clone_ref, "-f", "wav", "pipe:1"],
+                              stdout=subprocess.PIPE, check=True).stdout
+        x, sr = sf.read(io.BytesIO(wavb), dtype="float32", always_2d=False)
+        if x.ndim > 1:
+            x = x.mean(-1)
+        VCP = tts.create_voice_clone_prompt(ref_audio=(x.astype(np.float32), int(sr)),
                                             ref_text=open(args.clone_text).read().strip())
-        print(f"[uqt.engine_proc] clone voice: {args.clone_ref} ({len(pcm) // 4 / 24000:.2f} s)", flush=True)
+        print(f"[uqt.engine_proc] clone voice: {args.clone_ref} ({len(x) / sr:.2f} s at {sr} Hz)", flush=True)
     with torch.inference_mode():
         from uqt.engine import SamplingCfg
+        if os.environ.get("UQT_CP_FP32") == "1":  # code predictor sampler: fp32 scaled logits + 32-bit top-k (uqt/cp_sample_fp32.py)
+            from uqt import cp_sample_fp32
+            cp_sample_fp32.install()
+            print("[uqt.engine_proc] code predictor sampler: fp32", flush=True)
         ev = os.environ.get
         samp = SamplingCfg(temperature=float(ev("UQT_TEMP", "0.9")), top_k=int(ev("UQT_TOPK", "50")),
                            repetition_penalty=float(ev("UQT_REP", "1.05")), cp_temperature=float(ev("UQT_CP_TEMP", "0.9")),
