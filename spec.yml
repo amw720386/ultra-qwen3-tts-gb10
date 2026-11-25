@@ -3,7 +3,7 @@
 project:
   name: ultra-qwen3-tts-gb10
   emoji: "🔊"
-  tagline: Streaming Qwen3-TTS on one NVIDIA GB10, at {{ n.vs_vllm }} the throughput of vLLM (vLLM-Omni 0.32).
+  tagline: The fastest Qwen3-TTS engine for a GB10.
   repo: amw720386/ultra-qwen3-tts-gb10
 hero:
   title: ultra-qwen3-tts-gb10

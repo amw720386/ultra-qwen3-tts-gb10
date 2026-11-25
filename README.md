@@ -4,7 +4,7 @@
 
 # 🔊 ultra-qwen3-tts-gb10
 
-**Streaming Qwen3-TTS on one NVIDIA GB10, at 3.1× the throughput of vLLM (vLLM-Omni 0.32).**
+**The fastest Qwen3-TTS engine for a GB10.**
 
 [![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) ![model: Qwen3-TTS-12Hz-1.7B](https://img.shields.io/badge/model-Qwen3--TTS--12Hz--1.7B-6f42c1) ![GPU: NVIDIA GB10](https://img.shields.io/badge/GPU-NVIDIA%20GB10-76b900)
 
