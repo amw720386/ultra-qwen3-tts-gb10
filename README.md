@@ -84,7 +84,7 @@ fused into single kernels. Details: [docs/techniques.md](docs/techniques.md).
 
 ## 🎯 Accuracy
 
-Word error rate through each system's own server on one GB10, with final default settings: the same 300 LibriSpeech test-clean texts at
+Word error rate through each system's own server, on GB10s of the same model: the same 300 LibriSpeech test-clean texts at
 32 and 64 clients, up to 88 runs, scored with Whisper large-v3: 26,400 clips from this engine, 14,400 from sglang-omni and 2,399 from
 vLLM-Omni ([intervals](docs/benchmarks.md#accuracy-through-the-server)).
 
@@ -99,6 +99,7 @@ A garbled clip has more than half its words wrong.
 - 🟰 **Level** with sglang-omni: overall WER +0.01 points (95% interval -0.37 to +0.39), 53 garbled clips of 26,400 against 29 of 14,400 (Fisher exact p = 1.0).
 - 🧪 **Small sample:** vLLM-Omni has 2,399 clips, so its overall WER is uncertain (this engine's is 0.47 points lower in the test they shared, 95% interval 2.53 lower to 0.79 higher).
 - ℹ️ An earlier 2,400-clip test had this engine behind by 0.50 points (9 garbled clips against 3). That test is part of the numbers above; six times more clips did not repeat the gap.
+- 🔧 **Hang fix:** 12,000 of this engine's clips come after a fix for a GPU hang seen with unquantized weights. Those alone score 2.48% with 20 garbled clips, against 2.40% with 26 for sglang-omni in the same test, also no measurable difference.
 
 <a id="quick-start"></a>
 
@@ -119,6 +120,7 @@ curl -s http://127.0.0.1:8091/v1/audio/speech -H "Content-Type: application/json
 ## ⚠️ Honest caveats
 
 - One box, one model variant and one voice. Throughput between runs at 64 clients ranged from 88 to 122 audio-s/s.
+- The speed numbers were measured before the hang fix. With and without it, throughput at 32 to 256 clients differed by -2.2% to +0.7%, none of it significant ([details](docs/benchmarks.md#accuracy-through-the-server)).
 - sglang-omni at 1, 128 and 256 clients and vLLM-Omni were measured two days before the other runs, on the same machine.
 - The first start compiles and captures every kernel and graph and takes many minutes with hybrid weights.
 - sglang-omni needs a one-line patch to start on GB10, because one of its Triton kernels exceeds the chip's shared memory.
