@@ -66,14 +66,19 @@ class FastPromptBuilder:
 
     def _lang_id(self, language):
         lang = language.lower()
-        if lang == "auto" or lang not in self.tc.codec_language_id:
+        if lang == "auto":
+            return "auto"  # no language id: the official builder's nothink prefix (checked against it by test_auto_prefix)
+        if lang not in self.tc.codec_language_id:
             return None
         return self.tc.codec_language_id[lang]
 
     def _prefix(self, lang_id, spk_embed):
         """role (3) + tts_pad*(n-2) + tts_bos added to codec prefix minus its last row."""
         tc = self.tc
-        c0 = self._codec([tc.codec_think_id, tc.codec_think_bos_id, lang_id, tc.codec_think_eos_id])
+        if lang_id == "auto":
+            c0 = self._codec([tc.codec_nothink_id, tc.codec_think_bos_id, tc.codec_think_eos_id])
+        else:
+            c0 = self._codec([tc.codec_think_id, tc.codec_think_bos_id, lang_id, tc.codec_think_eos_id])
         c1 = self._codec([tc.codec_pad_id, tc.codec_bos_id])
         codec = torch.cat([c0, spk_embed.reshape(1, -1).to(self.dt), c1], 0)
         n = codec.shape[0]

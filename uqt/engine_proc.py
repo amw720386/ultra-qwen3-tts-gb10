@@ -32,6 +32,16 @@ HDR = struct.Struct("<BII")
 REQ, AUDIO, END, ERR, CANCEL, READY = 1, 2, 3, 4, 5, 6
 
 
+# Base voice clone (ICL): one reference voice for every request when --clone-ref is set; else CustomVoice speakers.
+VCP = None
+
+
+def mkprompt(eng, text, language="English", voice=None):
+    if VCP is not None:
+        return eng.build_prompt("clone", text=text, language=language, voice_clone_prompt=VCP)
+    return eng.build_prompt("custom", text=text, language=language, speaker=voice or "Ryan")
+
+
 def _pcm(w):
     return (np.clip(w, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
 
@@ -125,7 +135,7 @@ def selfwarm(eng, be, waves=(1, 16, 64, 256, 512), K=2, max_frames=120):
                         break
                     taken.add(slot)
                     _, tx = pend.pop()
-                    batch.append((slot, eng.build_prompt("custom", text=tx, language="English", speaker="Ryan"),
+                    batch.append((slot, mkprompt(eng, tx),
                                   max_frames, {"id": 0}))
                 if batch:
                     be.admit_many(batch)
@@ -194,7 +204,7 @@ def _retune(be):
         pass
 
 
-def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True):
+def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=int(os.environ.get("UQT_MAX_FRAMES", "400")), fast_lane=True):
     import torch
 
     q: queue.Queue = queue.Queue()
@@ -248,8 +258,7 @@ def serve(eng, be, conn, K=2, admit_per_iter=16, max_frames=400, fast_lane=True)
                 if rid in cancelled:
                     continue
                 try:
-                    p = eng.build_prompt("custom", text=req["input"], language=req.get("language") or "English",
-                                         speaker=req.get("voice") or "Ryan")
+                    p = mkprompt(eng, req["input"], req.get("language") or "English", req.get("voice"))
                 except Exception as e:  # bad request: report and move on
                     msg = repr(e)[:500].encode()
                     conn.sendall(HDR.pack(ERR, rid, len(msg)) + msg)
@@ -365,6 +374,8 @@ def main():
     ap.add_argument("--max-slots", type=int, default=512)
     ap.add_argument("--max-len", type=int, default=512)
     ap.add_argument("--weights", default=os.environ.get("UQT_WEIGHTS", "hyb"))
+    ap.add_argument("--clone-ref", default=None, help="reference audio for Base voice clone (ICL), any ffmpeg format")
+    ap.add_argument("--clone-text", default=None, help="file with the reference audio's transcript")
     args = ap.parse_args()
 
     import torch
@@ -377,18 +388,31 @@ def main():
     torch.set_grad_enabled(False)
     tts = Qwen3TTSModel.from_pretrained(f"Qwen/Qwen3-TTS-12Hz-1.7B-{args.variant}", device_map="cuda:0",
                                         dtype=torch.bfloat16, attn_implementation="sdpa")
+    if args.clone_ref:
+        global VCP
+        import subprocess
+        pcm = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", args.clone_ref, "-f", "f32le", "-ac", "1",
+                              "-ar", "24000", "pipe:1"], stdout=subprocess.PIPE, check=True).stdout
+        VCP = tts.create_voice_clone_prompt(ref_audio=(np.frombuffer(pcm, dtype=np.float32).copy(), 24000),
+                                            ref_text=open(args.clone_text).read().strip())
+        print(f"[uqt.engine_proc] clone voice: {args.clone_ref} ({len(pcm) // 4 / 24000:.2f} s)", flush=True)
     with torch.inference_mode():
-        eng = Engine(tts, max_len=2048, streaming_codec=False, autotune=False, weights=args.weights)
+        from uqt.engine import SamplingCfg
+        ev = os.environ.get
+        samp = SamplingCfg(temperature=float(ev("UQT_TEMP", "0.9")), top_k=int(ev("UQT_TOPK", "50")),
+                           repetition_penalty=float(ev("UQT_REP", "1.05")), cp_temperature=float(ev("UQT_CP_TEMP", "0.9")),
+                           cp_top_k=int(ev("UQT_CP_TOPK", "50")))
+        print(f"[uqt.engine_proc] sampling {samp} weights {args.weights}", flush=True)
+        eng = Engine(tts, max_len=max(2048, args.max_len), streaming_codec=False, autotune=False, weights=args.weights, sampling=samp)
         be = BatchEngine(eng, max_slots=args.max_slots, max_len=args.max_len)
         be.warmup(Ks=tuple(int(k) for k in os.environ.get("UQT_WARM_KS", "").split(",") if k)
                   or tuple(k for k, on in ((1, K_LOW_AT or FRESH1_AT), (2, True), (K_HIGH, K_HIGH)) if on))
-        wp = eng.build_prompt("custom", text="Warming up the fast lane for new requests.", language="English",
-                              speaker="Ryan")
+        wp = mkprompt(eng, "Warming up the fast lane for new requests.")
         eng.warmup(wp, Ks=(2,), max_bucket=min(1024, args.max_len), prefill_max=512)
         for i, tx in enumerate(["Hi.", "A somewhat longer warm-up sentence for the fast lane path.",
                                 "An even longer warm-up sentence, so that a larger prefill bucket is exercised "
                                 "by the fast lane before any real request arrives at the server."]):
-            p = eng.build_prompt("custom", text=tx, language="English", speaker="Ryan")
+            p = mkprompt(eng, tx)
             be.admit_fast(i, p, 50, {"id": 0})
             be.release(i)
         torch.cuda.synchronize()
