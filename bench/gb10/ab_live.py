@@ -71,7 +71,7 @@ def main():
                     json.dump(variants[n], open(tune, "w"))
                     time.sleep(1.0)
                     load(url, make, texts, concs=(1,), reqs_per_client=1)
-                    for k, b in asyncio.run(collect(url, man, 256)).items():
+                    for k, b in asyncio.run(collect(url, man, 256))[0].items():
                         d = len(b) / 2 / 24000
                         tot[n]["clips"] += 1
                         tot[n]["over_25s"] += d > 25
